@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SceneCollectionManagerDialog</class>
+ <widget class="QDialog" name="SceneCollectionManagerDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>587</width>
+    <height>436</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>SceneCollectionManager</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="2" column="0">
+      <widget class="QListWidget" name="sceneCollectionList"/>
+     </item>
+     <item row="3" column="0">
+      <widget class="QToolBar" name="sceneCollectionsToolbar">
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+       <property name="floatable">
+        <bool>false</bool>
+       </property>
+       <addaction name="actionAddSceneCollection"/>
+       <addaction name="actionRemoveSceneCollection"/>
+       <addaction name="actionConfigSceneCollection"/>
+       <addaction name="actionSwitchSceneCollection"/>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QListWidget" name="backupList"/>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLineEdit" name="searchSceneCollectionEdit">
+       <property name="placeholderText">
+        <string>Search</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QToolBar" name="toolBar_2">
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+       <property name="floatable">
+        <bool>false</bool>
+       </property>
+       <addaction name="actionAddBackup"/>
+       <addaction name="actionRemoveBackup"/>
+       <addaction name="actionConfigBackup"/>
+       <addaction name="actionSwitchBackup"/>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="searchBackupEdit">
+       <property name="placeholderText">
+        <string>Search</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>SceneCollection</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Backup</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+  <action name="actionAddSceneCollection">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/plus.svg</normaloff>:/res/images/plus.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Add</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">addIconSmall</string>
+   </property>
+  </action>
+  <action name="actionRemoveSceneCollection">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/minus.svg</normaloff>:/res/images/minus.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Remove</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">removeIconSmall</string>
+   </property>
+  </action>
+  <action name="actionAddBackup">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/plus.svg</normaloff>:/res/images/plus.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Add</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">addIconSmall</string>
+   </property>
+  </action>
+  <action name="actionRemoveBackup">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/minus.svg</normaloff>:/res/images/minus.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Remove</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">removeIconSmall</string>
+   </property>
+  </action>
+  <action name="actionConfigSceneCollection">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/settings/images/settings/general.svg</normaloff>:/settings/images/settings/general.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Config</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">propertiesIconSmall</string>
+   </property>
+  </action>
+  <action name="actionConfigBackup">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/settings/images/settings/general.svg</normaloff>:/settings/images/settings/general.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Config</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">propertiesIconSmall</string>
+   </property>
+  </action>
+  <action name="actionSwitchBackup">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/media/media_play.svg</normaloff>:/res/images/media/media_play.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Switch</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">playIcon</string>
+   </property>
+  </action>
+  <action name="actionSwitchSceneCollection">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/res/images/media/media_play.svg</normaloff>:/res/images/media/media_play.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Switch</string>
+   </property>
+   <property name="themeID" stdset="0">
+    <string notr="true">playIcon</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
