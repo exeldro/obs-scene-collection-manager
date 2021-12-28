@@ -1,4 +1,4 @@
-project(scene-collection-manager VERSION 0.0.1)
+project(scene-collection-manager VERSION 0.0.2)
 set(PROJECT_FULL_NAME "Scene Collection Manager")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)

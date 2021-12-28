@@ -92,14 +92,7 @@ static void BackupSceneCollection()
 	if (!GetFileSafeName(currentSceneCollection, currentSafeName))
 		return;
 
-	char path[512];
-	int ret = os_get_config_path(path, sizeof(path),
-				     "obs-studio/basic/scenes/");
-	if (ret <= 0) {
-		blog(LOG_WARNING, "Failed to get config path for scene "
-				  "collections");
-		return;
-	}
+	std::string path = obs_module_config_path("../../basic/scenes/");
 
 	std::string backupName = os_generate_formatted_filename(
 		"", true, "%CCYY-%MM-%DD %hh:%mm:%ss");
@@ -307,14 +300,8 @@ void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
 		if (!GetFileSafeName(text.toUtf8().constData(), safeName))
 			return;
 
-		char path[512];
-		int ret = os_get_config_path(path, sizeof(path),
-					     "obs-studio/basic/scenes/");
-		if (ret <= 0) {
-			blog(LOG_WARNING, "Failed to get config path for scene "
-					  "collections");
-			return;
-		}
+		std::string path =
+			obs_module_config_path("../../basic/scenes/");
 
 		const auto t = text.toUtf8();
 		const auto c = t.constData();
@@ -405,14 +392,8 @@ void SceneCollectionManagerDialog::on_actionRenameSceneCollection_triggered()
 		if (!GetFileSafeName(text.toUtf8().constData(), safeName))
 			return;
 
-		char path[512];
-		int ret = os_get_config_path(path, sizeof(path),
-					     "obs-studio/basic/scenes/");
-		if (ret <= 0) {
-			blog(LOG_WARNING, "Failed to get config path for scene "
-					  "collections");
-			return;
-		}
+		std::string path =
+			obs_module_config_path("../../basic/scenes/");
 
 		std::string filePath = path;
 		filePath += safeName;
@@ -647,14 +628,9 @@ void SceneCollectionManagerDialog::on_actionSwitchBackup_triggered()
 					"scene_collection_manager_temp");
 				obs_frontend_set_current_scene_collection(
 					item->text().toUtf8().constData());
-				char path[512];
-				int ret = os_get_config_path(
-					path, sizeof(path),
-					"obs-studio/basic/scenes/scene_collection_manager_temp.json");
-				if (ret <= 0) {
-					return;
-				}
-				os_unlink(path);
+				std::string path = obs_module_config_path(
+					"../../basic/scenes/scene_collection_manager_temp.json");
+				os_unlink(path.c_str());
 			} else {
 				obs_frontend_set_current_scene_collection(
 					item->text().toUtf8().constData());
@@ -718,16 +694,9 @@ void SceneCollectionManagerDialog::on_backupList_itemDoubleClicked(
 
 void SceneCollectionManagerDialog::ReadSceneCollections()
 {
-	char path[512];
-	int ret = os_get_config_path(path, sizeof(path),
-				     "obs-studio/basic/scenes/*.json");
-	if (ret <= 0) {
-		blog(LOG_WARNING, "Failed to get config path for scene "
-				  "collections");
-		return;
-	}
+	std::string path = obs_module_config_path("../../basic/scenes/*.json");
 	os_glob_t *glob;
-	if (os_glob(path, 0, &glob) != 0) {
+	if (os_glob(path.c_str(), 0, &glob) != 0) {
 		blog(LOG_WARNING, "Failed to glob scene collections");
 		return;
 	}
