@@ -2,6 +2,9 @@
 
 Plugin for OBS Studio to add a Scene Collection Manager.
 
+# Download
+https://obsproject.com/forum/resources/scene-collection-manager.1434/
+
 # Build
 - Build OBS Studio: https://obsproject.com/wiki/Install-Instructions
 - Check out this repository to UI/frontend-plugins/scene-collection-manager
