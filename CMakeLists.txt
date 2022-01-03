@@ -1,7 +1,12 @@
+cmake_minimum_required(VERSION 3.18)
 project(scene-collection-manager VERSION 0.0.2)
 set(PROJECT_FULL_NAME "Scene Collection Manager")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
+
+include_directories(${scene-collection-manager_BINARY_DIR})
+
+find_package(Qt5Widgets)
 
 set(CMAKE_AUTOMOC ON)
 

@@ -5,6 +5,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <wctype.h>
 
 #include "obs-frontend-api.h"
 #include "obs-module.h"
