@@ -333,34 +333,40 @@ void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
 
 void SceneCollectionManagerDialog::on_actionRemoveSceneCollection_triggered()
 {
-	if (const auto item = ui->sceneCollectionList->currentItem()) {
-		QMessageBox remove(this);
-		remove.setText(QString::fromUtf8(
-			obs_module_text("DoYouWantToRemoveSceneCollection")));
-		QPushButton *yes = remove.addButton(
-			QString::fromUtf8(obs_module_text("Yes")),
-			QMessageBox::YesRole);
-		remove.setDefaultButton(yes);
-		remove.addButton(QString::fromUtf8(obs_module_text("No")),
-				 QMessageBox::NoRole);
-		remove.setIcon(QMessageBox::Question);
-		remove.setWindowTitle(
-			QString::fromUtf8(obs_module_text("ConfirmRemove")));
-		remove.exec();
-
-		if (reinterpret_cast<QAbstractButton *>(yes) !=
-		    remove.clickedButton())
+	auto items = ui->sceneCollectionList->selectedItems();
+	if (items.isEmpty()) {
+		if (const auto item =
+			    ui->sceneCollectionList->currentItem())
+			items.append(item);
+		else
 			return;
+	}
+	QMessageBox remove(this);
+	remove.setText(QString::fromUtf8(
+		obs_module_text("DoYouWantToRemoveSceneCollection")));
+	QPushButton *yes =
+		remove.addButton(QString::fromUtf8(obs_module_text("Yes")),
+				 QMessageBox::YesRole);
+	remove.setDefaultButton(yes);
+	remove.addButton(QString::fromUtf8(obs_module_text("No")),
+			 QMessageBox::NoRole);
+	remove.setIcon(QMessageBox::Question);
+	remove.setWindowTitle(
+		QString::fromUtf8(obs_module_text("ConfirmRemove")));
+	remove.exec();
 
+	if (reinterpret_cast<QAbstractButton *>(yes) != remove.clickedButton())
+		return;
+	for(auto &item :items) {
 		const auto filePath = scene_collections.at(item->text());
 		if (filePath.length() == 0)
-			return;
+			continue;
 
 		os_unlink(filePath.c_str());
 		os_rmdir(GetBackupDirectory(filePath).c_str());
 		scene_collections.erase(item->text());
-		RefreshSceneCollections();
 	}
+	RefreshSceneCollections();
 }
 
 void SceneCollectionManagerDialog::on_actionConfigSceneCollection_triggered()
@@ -485,38 +491,46 @@ void SceneCollectionManagerDialog::on_actionRemoveBackup_triggered()
 		if (!filename.length())
 			return;
 
-		if (auto backupItem = ui->backupList->currentItem()) {
-			QMessageBox remove(this);
-			remove.setText(QString::fromUtf8(
-				obs_module_text("DoYouWantToRemoveBackup")));
-			QPushButton *yes = remove.addButton(
-				QString::fromUtf8(obs_module_text("Yes")),
-				QMessageBox::YesRole);
-			remove.setDefaultButton(yes);
-			remove.addButton(
-				QString::fromUtf8(obs_module_text("No")),
-				QMessageBox::NoRole);
-			remove.setIcon(QMessageBox::Question);
-			remove.setWindowTitle(QString::fromUtf8(
-				obs_module_text("ConfirmRemove")));
-			remove.exec();
-
-			if (reinterpret_cast<QAbstractButton *>(yes) !=
-			    remove.clickedButton())
+		auto backupItems = ui->backupList->selectedItems();
+		if (backupItems.isEmpty()) {
+			if (const auto backupItem =
+				ui->backupList->currentItem())
+				backupItems.append(backupItem);
+			else
 				return;
+		}
+		QMessageBox remove(this);
+		remove.setText(QString::fromUtf8(
+			obs_module_text("DoYouWantToRemoveBackup")));
+		QPushButton *yes = remove.addButton(
+			QString::fromUtf8(obs_module_text("Yes")),
+			QMessageBox::YesRole);
+		remove.setDefaultButton(yes);
+		remove.addButton(QString::fromUtf8(obs_module_text("No")),
+				 QMessageBox::NoRole);
+		remove.setIcon(QMessageBox::Question);
+		remove.setWindowTitle(
+			QString::fromUtf8(obs_module_text("ConfirmRemove")));
+		remove.exec();
 
+		if (reinterpret_cast<QAbstractButton *>(yes) !=
+		    remove.clickedButton())
+			return;
+		for (auto &backupItem : backupItems) {
 			const auto backupDir = GetBackupDirectory(filename);
+			auto itemName = backupItem->text();
+			auto itemNameUtf8 = itemName.toUtf8();
 			std::string safeName;
 			if (!GetFileSafeName(
-				    backupItem->text().toUtf8().constData(),
+				    itemNameUtf8.constData(),
 				    safeName))
-				return;
+				continue;
 
 			const auto backupFile = backupDir + safeName + ".json";
 			os_unlink(backupFile.c_str());
-			on_sceneCollectionList_currentRowChanged(
-				ui->sceneCollectionList->currentRow());
 		}
+		on_sceneCollectionList_currentRowChanged(
+			ui->sceneCollectionList->currentRow());
 	}
 }
 
