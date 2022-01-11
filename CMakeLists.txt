@@ -11,11 +11,10 @@ find_package(Qt5Widgets)
 set(CMAKE_AUTOMOC ON)
 
 set(scene-collection-manager_HEADERS
-    scene-collection-manager.hpp
+	scene-collection-manager.hpp
 	version.h)
-
 set(scene-collection-manager_SOURCES
-    scene-collection-manager.cpp)
+	scene-collection-manager.cpp)
 
 if(WIN32)
 	get_filename_component(ISS_FILES_DIR "${CMAKE_BINARY_DIR}\\..\\package" ABSOLUTE)
@@ -32,6 +31,9 @@ if(WIN32)
 		scene-collection-manager.rc)
 endif()
 
+if(BUILD_OUT_OF_TREE)
+    find_package(LibObs REQUIRED)
+endif()
 
 qt5_wrap_ui(scene-collection-manager_UI_HEADERS SceneCollectionManager.ui)
 
@@ -41,9 +43,25 @@ add_library(scene-collection-manager MODULE
 	${scene-collection-manager_UI_HEADERS})
 
 target_link_libraries(scene-collection-manager
-	obs-frontend-api
-	Qt5::Widgets
-	libobs)
+		obs-frontend-api
+		Qt5::Widgets
+		libobs)
 
-set_target_properties(scene-collection-manager PROPERTIES FOLDER "plugins/exeldro")
-install_obs_plugin_with_data(scene-collection-manager data)
+if(BUILD_OUT_OF_TREE)
+    if(NOT LIB_OUT_DIR)
+        set(LIB_OUT_DIR "/lib/obs-plugins")
+    endif()
+    if(NOT DATA_OUT_DIR)
+        set(DATA_OUT_DIR "/share/obs/obs-plugins/scene-collection-manager")
+    endif()
+    set_target_properties(scene-collection-manager PROPERTIES PREFIX "")
+    install(TARGETS scene-collection-manager
+        LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${LIB_OUT_DIR})
+    install(DIRECTORY data/locale
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/${DATA_OUT_DIR})
+else()
+    target_include_directories(scene-collection-manager PRIVATE
+        "${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
+    set_target_properties(scene-collection-manager PROPERTIES FOLDER "plugins/exeldro")
+    install_obs_plugin_with_data(scene-collection-manager data)
+endif()
