@@ -1,10 +1,13 @@
 #include "scene-collection-manager.hpp"
 
 #include <qabstractbutton.h>
+#include <QDesktopServices>
 #include <QDir>
+#include <QFileDialog>
 #include <QMenu>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QUrl>
 #include <wctype.h>
 
 #include "obs-frontend-api.h"
@@ -24,6 +27,7 @@ static obs_hotkey_id backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
 SceneCollectionManagerDialog *sceneCollectionManagerDialog = nullptr;
 
 static bool autoSaveBackup = false;
+static std::string customBackupDir;
 
 void ShowSceneCollectionManagerDialog()
 {
@@ -50,7 +54,7 @@ void SceneCollectionManagerHotkey(void *data, obs_hotkey_id id,
 
 bool GetFileSafeName(const char *name, std::string &file)
 {
-	size_t base_len = strlen(name);
+	const size_t base_len = strlen(name);
 	size_t len = os_utf8_to_wcs(name, base_len, nullptr, 0);
 	std::wstring wfile;
 
@@ -104,6 +108,12 @@ static void BackupSceneCollection()
 		return;
 
 	std::string backupDir = path;
+	if (!customBackupDir.empty()) {
+		backupDir = customBackupDir;
+	}
+	if (backupDir.back() != '/' && backupDir.back() != '\\') {
+		backupDir += "/";
+	}
 	backupDir += currentSafeName;
 	backupDir += "/";
 	os_mkdirs(backupDir.c_str());
@@ -129,15 +139,47 @@ void BackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 	BackupSceneCollection();
 }
 
+std::string GetFilenameFromPath(std::string path)
+{
+	const auto slash = path.find_last_of('/');
+	const auto backslash = path.find_last_of('\\');
+	if (slash != std::string::npos && backslash != std::string::npos) {
+		if (slash > backslash) {
+			path = path.substr(slash + 1);
+		} else {
+			path = path.substr(backslash + 1);
+		}
+	} else if (slash != std::string::npos) {
+		path = path.substr(slash + 1);
+	} else if (backslash != std::string::npos) {
+		path = path.substr(backslash + 1);
+	}
+
+	const auto point = path.find_last_of('.');
+	if (point != std::string::npos) {
+		path = path.substr(0, point);
+	}
+	return path;
+}
+
 std::string GetBackupDirectory(std::string filename)
 {
-
-	auto l = filename.length();
-	if (filename.compare(l - 5, 5, ".json") == 0) {
-		filename.resize(l - 5);
-		filename.append("/");
+	if (customBackupDir.empty()) {
+		auto l = filename.length();
+		if (filename.compare(l - 5, 5, ".json") == 0) {
+			filename.resize(l - 5);
+			filename.append("/");
+		}
+		return filename;
 	}
-	return filename;
+	filename = GetFilenameFromPath(filename);
+	std::string dir = customBackupDir;
+
+	if (dir.back() != '/' && dir.back() != '\\')
+		dir += "/";
+	dir += filename;
+	dir += "/";
+	return dir;
 }
 
 static void frontend_event(obs_frontend_event event, void *)
@@ -187,11 +229,14 @@ bool obs_module_load()
 		obs_module_text("BackupSceneCollection"),
 		BackupSceneCollectionHotkey, nullptr);
 
-	autoSaveBackup = config_get_bool(obs_frontend_get_global_config(),
-					 "SceneCollectionManager",
+	auto config = obs_frontend_get_global_config();
+	autoSaveBackup = config_get_bool(config, "SceneCollectionManager",
 					 "AutoSaveBackup");
-	const auto *data = config_get_string(obs_frontend_get_global_config(),
-					     "SceneCollectionManager",
+	auto *d = config_get_string(config, "SceneCollectionManager",
+				    "BackupDir");
+	if (d)
+		customBackupDir = d;
+	const auto *data = config_get_string(config, "SceneCollectionManager",
 					     "HotkeyData");
 	if (data) {
 		QByteArray dataBytes = QByteArray::fromBase64(QByteArray(data));
@@ -335,8 +380,7 @@ void SceneCollectionManagerDialog::on_actionRemoveSceneCollection_triggered()
 {
 	auto items = ui->sceneCollectionList->selectedItems();
 	if (items.isEmpty()) {
-		if (const auto item =
-			    ui->sceneCollectionList->currentItem())
+		if (const auto item = ui->sceneCollectionList->currentItem())
 			items.append(item);
 		else
 			return;
@@ -357,7 +401,7 @@ void SceneCollectionManagerDialog::on_actionRemoveSceneCollection_triggered()
 
 	if (reinterpret_cast<QAbstractButton *>(yes) != remove.clickedButton())
 		return;
-	for(auto &item :items) {
+	for (auto &item : items) {
 		const auto filePath = scene_collections.at(item->text());
 		if (filePath.length() == 0)
 			continue;
@@ -494,7 +538,7 @@ void SceneCollectionManagerDialog::on_actionRemoveBackup_triggered()
 		auto backupItems = ui->backupList->selectedItems();
 		if (backupItems.isEmpty()) {
 			if (const auto backupItem =
-				ui->backupList->currentItem())
+				    ui->backupList->currentItem())
 				backupItems.append(backupItem);
 			else
 				return;
@@ -521,9 +565,8 @@ void SceneCollectionManagerDialog::on_actionRemoveBackup_triggered()
 			auto itemName = backupItem->text();
 			auto itemNameUtf8 = itemName.toUtf8();
 			std::string safeName;
-			if (!GetFileSafeName(
-				    itemNameUtf8.constData(),
-				    safeName))
+			if (!GetFileSafeName(itemNameUtf8.constData(),
+					     safeName))
 				continue;
 
 			const auto backupFile = backupDir + safeName + ".json";
@@ -537,18 +580,65 @@ void SceneCollectionManagerDialog::on_actionRemoveBackup_triggered()
 void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 {
 	QMenu m;
-	auto a = m.addAction(QString::fromUtf8(obs_module_text("AutoBackup")));
+	auto a = m.addAction(QString::fromUtf8(obs_module_text("Rename")));
+	connect(a, SIGNAL(triggered()), this,
+		SLOT(on_actionRenameBackup_triggered()));
+
+	a = m.addAction(QString::fromUtf8(obs_module_text("AutoBackup")));
 	a->setCheckable(true);
 	a->setChecked(autoSaveBackup);
 	connect(a, &QAction::triggered, [] {
 		autoSaveBackup = !autoSaveBackup;
+		const auto config = obs_frontend_get_global_config();
 		config_set_bool(obs_frontend_get_global_config(),
 				"SceneCollectionManager", "AutoSaveBackup",
 				autoSaveBackup);
 	});
-	a = m.addAction(QString::fromUtf8(obs_module_text("Rename")));
-	connect(a, SIGNAL(triggered()), this,
-		SLOT(on_actionRenameBackup_triggered()));
+
+	auto dirMenu =
+		m.addMenu(QString::fromUtf8(obs_module_text("BackupDir")));
+	a = dirMenu->addAction(QString::fromUtf8(obs_module_text("ShowDir")));
+	connect(a, &QAction::triggered, [] {
+		const QUrl url = QUrl::fromLocalFile(QString::fromUtf8(
+			customBackupDir.empty()
+				? os_get_abs_path_ptr(obs_module_config_path(
+					  "../../basic/scenes/"))
+				: customBackupDir.c_str()));
+		QDesktopServices::openUrl(url);
+	});
+
+	dirMenu->addSeparator();
+	a = dirMenu->addAction(QString::fromUtf8(obs_module_text("Default")));
+	a->setCheckable(true);
+	a->setChecked(customBackupDir.empty());
+	connect(a, &QAction::triggered, [this] {
+		customBackupDir = "";
+		const auto config = obs_frontend_get_global_config();
+		config_set_string(config, "SceneCollectionManager", "BackupDir",
+				  customBackupDir.c_str());
+		on_sceneCollectionList_currentRowChanged(
+			ui->sceneCollectionList->currentRow());
+	});
+	a = dirMenu->addAction(QString::fromUtf8(obs_module_text("Custom")));
+	a->setCheckable(true);
+	a->setChecked(!customBackupDir.empty());
+	connect(a, &QAction::triggered, [this] {
+		const QString dir = QFileDialog::getExistingDirectory(
+			this, QString::fromUtf8(obs_module_text("BackupDir")),
+			QString::fromUtf8(customBackupDir.c_str()),
+			QFileDialog::ShowDirsOnly |
+				QFileDialog::DontResolveSymlinks);
+		if (dir.isEmpty())
+			return;
+		auto d = dir.toUtf8();
+		customBackupDir = d.constData();
+		const auto config = obs_frontend_get_global_config();
+		config_set_string(config, "SceneCollectionManager", "BackupDir",
+				  customBackupDir.c_str());
+		on_sceneCollectionList_currentRowChanged(
+			ui->sceneCollectionList->currentRow());
+	});
+
 	m.exec(QCursor::pos());
 }
 
