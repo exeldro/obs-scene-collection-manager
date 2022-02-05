@@ -211,7 +211,7 @@ jobs:
     runs-on: [windows-latest]
     env:
       QT_VERSION: '5.15.2'
-      CMAKE_GENERATOR: "Visual Studio 16 2019"
+      CMAKE_GENERATOR: "Visual Studio 17 2022"
       CMAKE_SYSTEM_VERSION: "10.0.18363.657"
       WINDOWS_DEPS_VERSION: '2019'
     steps:
@@ -291,11 +291,11 @@ jobs:
       - name: Code Sign 32
         if: success() && github.event_name != 'pull_request'
         run: |
-          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x86/signtool.exe' sign /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\obs-plugins\32bit\${{ env.PLUGIN_NAME }}.dll
+          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x86/signtool.exe' sign /fd SHA256 /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\obs-plugins\32bit\${{ env.PLUGIN_NAME }}.dll
       - name: Code Sign 64
         if: success() && github.event_name != 'pull_request'
         run: |
-          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x64/signtool.exe' sign /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\obs-plugins\64bit\${{ env.PLUGIN_NAME }}.dll
+          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x64/signtool.exe' sign /fd SHA256 /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\obs-plugins\64bit\${{ env.PLUGIN_NAME }}.dll
       - name: Publish zip
         if: success()
         uses: actions/upload-artifact@v2.2.0
@@ -313,7 +313,7 @@ jobs:
       - name: Code Sign Installer
         if: success() && github.event_name != 'pull_request'
         run: |
-          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x64/signtool.exe' sign /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\${{ env.PLUGIN_NAME }}-installer.exe
+          & 'C:/Program Files (x86)/Windows Kits/10/bin/10.0.20348.0/x64/signtool.exe' sign /fd SHA256 /f certificate\certificate.pfx /p '${{ secrets.CERTIFICATE_PASS }}' /t http://timestamp.comodoca.com/authenticode .\package\${{ env.PLUGIN_NAME }}-installer.exe
       - name: Publish installer
         if: success()
         uses: actions/upload-artifact@v2.2.0

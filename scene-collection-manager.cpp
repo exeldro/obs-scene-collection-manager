@@ -314,7 +314,9 @@ void SceneCollectionManagerDialog::on_actionAddSceneCollection_triggered()
 	auto a = m.addAction(QString::fromUtf8(obs_module_text("New")));
 	connect(a, SIGNAL(triggered()), this,
 		SLOT(on_actionAddNewSceneCollection_triggered()));
-	//m.addAction(QString::fromUtf8(obs_module_text("Import")));
+	a = m.addAction(QString::fromUtf8(obs_module_text("Import")));
+	connect(a, SIGNAL(triggered()), this,
+		SLOT(on_actionImportSceneCollection_triggered()));
 	a = m.addAction(QString::fromUtf8(obs_module_text("Duplicate")));
 	connect(a, SIGNAL(triggered()), this,
 		SLOT(on_actionDuplicateSceneCollection_triggered()));
@@ -324,6 +326,150 @@ void SceneCollectionManagerDialog::on_actionAddSceneCollection_triggered()
 void SceneCollectionManagerDialog::on_actionAddNewSceneCollection_triggered()
 {
 	obs_frontend_add_scene_collection("");
+}
+
+void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
+{
+	const QString file = QFileDialog::getOpenFileName(
+		this, obs_module_text("ImportSceneCollection"), "",
+		"Scene Collection (*.json)");
+	if (file.isEmpty())
+		return;
+
+	auto fu = file.toUtf8();
+
+	auto data = obs_data_create_from_json_file(fu.constData());
+	if (!data)
+		return;
+
+	auto name = obs_data_get_string(data, "name");
+	auto n = QString::fromUtf8(name);
+
+	bool replace_current = false;
+	if (scene_collections.count(n) > 0) {
+		//TODO ask if replace
+		auto sc = obs_frontend_get_current_scene_collection();
+		if (strcmp(sc, name) == 0) {
+			replace_current = true;
+		} else {
+		}
+	} else {
+		if (!obs_frontend_add_scene_collection(name)) {
+			obs_data_release(data);
+			return;
+		}
+		replace_current = true;
+	}
+	std::string safeName;
+	if (!GetFileSafeName(name, safeName)) {
+		obs_data_release(data);
+		return;
+	}
+	std::string dir = fu.constData();
+	std::size_t found = dir.find_last_of("/\\");
+	if (found != std::string::npos) {
+		dir = dir.substr(0, found + 1);
+	}
+
+	try_fix_paths(data, dir.c_str());
+
+	std::string path = obs_module_config_path("../../basic/scenes/");
+	path += safeName;
+	path += ".json";
+	obs_data_save_json_safe(data, path.c_str(), "tmp", "bak");
+
+	if (replace_current) {
+		config_set_string(obs_frontend_get_global_config(), "Basic",
+				  "SceneCollection", "");
+		config_set_string(obs_frontend_get_global_config(), "Basic",
+				  "SceneCollectionFile",
+				  "scene_collection_manager_temp");
+
+		obs_frontend_set_current_scene_collection(name);
+		std::string tempPath = ""; //path;
+		tempPath += "scene_collection_manager_temp.json";
+		os_unlink(tempPath.c_str());
+	}
+	obs_data_release(data);
+}
+
+static bool replace(std::string &str, const char *from, const char *to)
+{
+	size_t start_pos = str.find(from);
+	if (start_pos == std::string::npos)
+		return false;
+	str.replace(start_pos, strlen(from), to);
+	return true;
+}
+
+void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
+						 const char *dir)
+{
+	obs_data_item_t *item = obs_data_first(data);
+	while (item) {
+		const enum obs_data_type type = obs_data_item_gettype(item);
+		if (type == OBS_DATA_STRING) {
+			std::string str = obs_data_item_get_string(item);
+			bool edit = false;
+			if (replace(str, "[U_COMBOBULATOR_PATH]", dir)) {
+				obs_data_item_set_string(&item, str.c_str());
+				edit = true;
+			}
+			bool local_url = false;
+			if (str.substr(0, 7) == "file://") {
+				str = str.substr(7);
+				local_url = true;
+			}
+			std::size_t found = str.find_last_of("/\\");
+			if (found != std::string::npos &&
+			    !os_file_exists(str.c_str())) {
+				while (found != std::string::npos) {
+					auto file = str.substr(found + 1);
+					if (file.find('.') == std::string::npos)
+						break;
+					auto oldDir = str.substr(0, found + 1);
+					std::string newFile = dir;
+					newFile += file;
+					if (os_file_exists(newFile.c_str())) {
+						if (local_url) {
+							str = "file://";
+							str += os_get_abs_path_ptr(
+								newFile.c_str());
+						} else {
+							str = os_get_abs_path_ptr(
+								newFile.c_str());
+						}
+						obs_data_item_set_string(
+							&item, str.c_str());
+						edit = true;
+						break;
+					}
+					found = str.find_last_of("/\\",
+								 found - 1);
+				}
+			}
+			if (edit) {
+				item = obs_data_first(data);
+				continue;
+			}
+		} else if (type == OBS_DATA_OBJECT) {
+			if (obs_data_t *obj = obs_data_item_get_obj(item)) {
+				try_fix_paths(obj, dir);
+				obs_data_release(obj);
+			}
+		} else if (type == OBS_DATA_ARRAY) {
+			const auto array = obs_data_item_get_array(item);
+			const auto count = obs_data_array_count(array);
+			for (size_t i = 0; i < count; i++) {
+				if (obs_data_t *obj =
+					    obs_data_array_item(array, i)) {
+					try_fix_paths(obj, dir);
+					obs_data_release(obj);
+				}
+			}
+		}
+		obs_data_item_next(&item);
+	}
 }
 
 void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
@@ -419,7 +565,8 @@ void SceneCollectionManagerDialog::on_actionConfigSceneCollection_triggered()
 	auto a = m.addAction(QString::fromUtf8(obs_module_text("Rename")));
 	connect(a, SIGNAL(triggered()), this,
 		SLOT(on_actionRenameSceneCollection_triggered()));
-	//m.addAction(QString::fromUtf8(obs_module_text("Export")));
+	//a = m.addAction(QString::fromUtf8(obs_module_text("Export")));
+	//connect(a, SIGNAL(triggered()), this,	SLOT(on_actionExportSceneCollection_triggered()));
 	m.exec(QCursor::pos());
 }
 
@@ -481,6 +628,20 @@ void SceneCollectionManagerDialog::on_actionRenameSceneCollection_triggered()
 		if (!items.empty()) {
 			ui->sceneCollectionList->setCurrentItem(items.at(0));
 		}
+	}
+}
+
+void SceneCollectionManagerDialog::on_actionExportSceneCollection_triggered()
+{
+	if (const auto item = ui->sceneCollectionList->currentItem()) {
+		const auto filename = scene_collections.at(item->text());
+		if (!filename.length())
+			return;
+		const QString file = QFileDialog::getSaveFileName(
+			this, obs_module_text("ExportSceneCollection"), "",
+			"Scene Collection Zip (*.scz)");
+		if (file.isEmpty())
+			return;
 	}
 }
 

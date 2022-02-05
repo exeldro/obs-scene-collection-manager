@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <QMainWindow>
 #include <memory>
+#include "obs.h"
 
 class SceneCollectionManagerDialog : public QDialog {
 	Q_OBJECT
@@ -14,15 +15,18 @@ private:
 	std::map<QString, std::string> scene_collections;
 	void ReadSceneCollections();
 	void RefreshSceneCollections();
+	void try_fix_paths(obs_data_t *data, const char *dir);
 private slots:
 	void on_searchSceneCollectionEdit_textChanged(const QString &text);
 
 	void on_actionAddSceneCollection_triggered();
 	void on_actionAddNewSceneCollection_triggered();
+	void on_actionImportSceneCollection_triggered();
 	void on_actionDuplicateSceneCollection_triggered();
 	void on_actionRemoveSceneCollection_triggered();
 	void on_actionConfigSceneCollection_triggered();
 	void on_actionRenameSceneCollection_triggered();
+	void on_actionExportSceneCollection_triggered();
 	void on_actionSwitchSceneCollection_triggered();
 
 	void on_actionAddBackup_triggered();
