@@ -330,67 +330,71 @@ void SceneCollectionManagerDialog::on_actionAddNewSceneCollection_triggered()
 
 void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 {
-	const QString file = QFileDialog::getOpenFileName(
+	auto files = QFileDialog::getOpenFileNames(
 		this, obs_module_text("ImportSceneCollection"), "",
 		"Scene Collection (*.json)");
-	if (file.isEmpty())
+	if (files.isEmpty())
 		return;
+	auto scene_collections_ = scene_collections;
+	for (auto file : files) {
 
-	auto fu = file.toUtf8();
+		auto fu = file.toUtf8();
 
-	auto data = obs_data_create_from_json_file(fu.constData());
-	if (!data)
-		return;
+		auto data = obs_data_create_from_json_file(fu.constData());
+		if (!data)
+			continue;
 
-	auto name = obs_data_get_string(data, "name");
-	auto n = QString::fromUtf8(name);
+		auto name = obs_data_get_string(data, "name");
+		auto n = QString::fromUtf8(name);
 
-	bool replace_current = false;
-	if (scene_collections.count(n) > 0) {
-		//TODO ask if replace
-		auto sc = obs_frontend_get_current_scene_collection();
-		if (strcmp(sc, name) == 0) {
-			replace_current = true;
+		bool replace_current = false;
+		if (scene_collections_.count(n) > 0) {
+			//TODO ask if replace
+			auto sc = obs_frontend_get_current_scene_collection();
+			if (strcmp(sc, name) == 0) {
+				replace_current = true;
+			} else {
+			}
 		} else {
+			if (!obs_frontend_add_scene_collection(name)) {
+				obs_data_release(data);
+				continue;
+			}
+			replace_current = true;
 		}
-	} else {
-		if (!obs_frontend_add_scene_collection(name)) {
+		std::string safeName;
+		if (!GetFileSafeName(name, safeName)) {
 			obs_data_release(data);
-			return;
+			continue;
 		}
-		replace_current = true;
-	}
-	std::string safeName;
-	if (!GetFileSafeName(name, safeName)) {
+		std::string dir = fu.constData();
+		std::size_t found = dir.find_last_of("/\\");
+		if (found != std::string::npos) {
+			dir = dir.substr(0, found + 1);
+		}
+
+		try_fix_paths(data, dir.c_str());
+
+		std::string path =
+			obs_module_config_path("../../basic/scenes/");
+		path += safeName;
+		path += ".json";
+		obs_data_save_json_safe(data, path.c_str(), "tmp", "bak");
+
+		if (replace_current) {
+			config_set_string(obs_frontend_get_global_config(),
+					  "Basic", "SceneCollection", "");
+			config_set_string(obs_frontend_get_global_config(),
+					  "Basic", "SceneCollectionFile",
+					  "scene_collection_manager_temp");
+
+			obs_frontend_set_current_scene_collection(name);
+			std::string tempPath = ""; //path;
+			tempPath += "scene_collection_manager_temp.json";
+			os_unlink(tempPath.c_str());
+		}
 		obs_data_release(data);
-		return;
 	}
-	std::string dir = fu.constData();
-	std::size_t found = dir.find_last_of("/\\");
-	if (found != std::string::npos) {
-		dir = dir.substr(0, found + 1);
-	}
-
-	try_fix_paths(data, dir.c_str());
-
-	std::string path = obs_module_config_path("../../basic/scenes/");
-	path += safeName;
-	path += ".json";
-	obs_data_save_json_safe(data, path.c_str(), "tmp", "bak");
-
-	if (replace_current) {
-		config_set_string(obs_frontend_get_global_config(), "Basic",
-				  "SceneCollection", "");
-		config_set_string(obs_frontend_get_global_config(), "Basic",
-				  "SceneCollectionFile",
-				  "scene_collection_manager_temp");
-
-		obs_frontend_set_current_scene_collection(name);
-		std::string tempPath = ""; //path;
-		tempPath += "scene_collection_manager_temp.json";
-		os_unlink(tempPath.c_str());
-	}
-	obs_data_release(data);
 }
 
 static bool replace(std::string &str, const char *from, const char *to)

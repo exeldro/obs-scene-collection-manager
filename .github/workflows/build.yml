@@ -93,7 +93,7 @@ jobs:
         run: |
           curl -L -O http://s.sudre.free.fr/Software/files/Packages.dmg
           sudo hdiutil attach ./Packages.dmg
-          sudo installer -pkg /Volumes/Packages\ 1.2.9/Install\ Packages.pkg -target /
+          sudo installer -pkg /Volumes/Packages\ 1.2.10/Install\ Packages.pkg -target /
       - name: Package
         if: success()
         shell: bash
@@ -304,9 +304,13 @@ jobs:
           path: package/*
       - name: "Package Installer (Prereqs)"
         run: |
+          echo "download msvc redist helper"
           curl "-kL" "https://github.com/Xaymar/msvc-redist-helper/releases/download/0.1/msvc-redist-helper-64.exe" "-f" "--retry" "5" "-o" "msvc-redist-helper.exe"
+          echo "download innosetup"
           curl "-kL" "https://files.jrsoftware.org/is/6/innosetup-6.0.3.exe" "-f" "--retry" "5" "-o" "inno.exe"
+          echo "install innosetup"
           .\inno.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART
+          echo "innosetup install done"
       - name: "Package Installer (Compile)"
         run: |
           & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /Qp ".\build64\UI\frontend-plugins\${{ env.PLUGIN_NAME }}\installer.iss"
