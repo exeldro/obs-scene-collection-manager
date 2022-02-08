@@ -139,25 +139,17 @@ void BackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 	BackupSceneCollection();
 }
 
-std::string GetFilenameFromPath(std::string path)
+std::string GetFilenameFromPath(std::string path, bool with_extension)
 {
-	const auto slash = path.find_last_of('/');
-	const auto backslash = path.find_last_of('\\');
-	if (slash != std::string::npos && backslash != std::string::npos) {
-		if (slash > backslash) {
-			path = path.substr(slash + 1);
-		} else {
-			path = path.substr(backslash + 1);
-		}
-	} else if (slash != std::string::npos) {
+	const auto slash = path.find_last_of("/\\");
+	if (slash != std::string::npos) {
 		path = path.substr(slash + 1);
-	} else if (backslash != std::string::npos) {
-		path = path.substr(backslash + 1);
 	}
-
-	const auto point = path.find_last_of('.');
-	if (point != std::string::npos) {
-		path = path.substr(0, point);
+	if (!with_extension) {
+		const auto point = path.find_last_of('.');
+		if (point != std::string::npos) {
+			path = path.substr(0, point);
+		}
 	}
 	return path;
 }
@@ -172,7 +164,7 @@ std::string GetBackupDirectory(std::string filename)
 		}
 		return filename;
 	}
-	filename = GetFilenameFromPath(filename);
+	filename = GetFilenameFromPath(filename, false);
 	std::string dir = customBackupDir;
 
 	if (dir.back() != '/' && dir.back() != '\\')
@@ -368,11 +360,16 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			continue;
 		}
 		std::string dir = fu.constData();
-		std::size_t found = dir.find_last_of("/\\");
-		if (found != std::string::npos) {
-			dir = dir.substr(0, found + 1);
+		std::size_t slash = dir.find_last_of("/\\");
+		if (slash != std::string::npos) {
+			auto point = dir.find_last_of('.');
+			if (point != std::string::npos && point > slash) {
+				dir = dir.substr(0, point);
+				dir += "/";
+				try_fix_paths(data, dir.c_str());
+			}
+			dir = dir.substr(0, slash + 1);
 		}
-
 		try_fix_paths(data, dir.c_str());
 
 		std::string path =
@@ -428,7 +425,11 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 			if (found != std::string::npos &&
 			    !os_file_exists(str.c_str())) {
 				while (found != std::string::npos) {
-					auto file = str.substr(found + 1);
+					auto file =
+						found == 0 && str[0] != '/' &&
+								str[0] != '\\'
+							? str
+							: str.substr(found + 1);
 					if (file.find('.') == std::string::npos)
 						break;
 					auto oldDir = str.substr(0, found + 1);
@@ -448,8 +449,16 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 						edit = true;
 						break;
 					}
-					found = str.find_last_of("/\\",
-								 found - 1);
+					if (found == 0) {
+						found = std::string::npos;
+					} else {
+						found = str.find_last_of(
+							"/\\", found - 1);
+						if (found ==
+						    std::string::npos) {
+							found = 0;
+						}
+					}
 				}
 			}
 			if (edit) {
@@ -468,6 +477,102 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 				if (obs_data_t *obj =
 					    obs_data_array_item(array, i)) {
 					try_fix_paths(obj, dir);
+					obs_data_release(obj);
+				}
+			}
+		}
+		obs_data_item_next(&item);
+	}
+}
+
+void SceneCollectionManagerDialog::export_local_files(obs_data_t *data,
+						      std::string dir,
+						      std::string subdir)
+{
+	obs_data_item_t *item = obs_data_first(data);
+	while (item) {
+		const enum obs_data_type type = obs_data_item_gettype(item);
+		if (type == OBS_DATA_STRING) {
+			std::string str = obs_data_item_get_string(item);
+			bool local_url = false;
+			if (str.substr(0, 7) == "file://") {
+				str = str.substr(7);
+				local_url = true;
+			}
+			auto slash = str.find('\\');
+			while (slash != std::string::npos) {
+				str.replace(slash, slash + 1, "/");
+				slash = str.find('\\');
+			}
+			std::size_t found = str.find_last_of("/\\");
+			if (found != std::string::npos &&
+			    os_file_exists(str.c_str()) &&
+			    (str.length() < dir.length() ||
+			     str.substr(0, dir.length()) != dir)) {
+				//todo move file to dir and update item
+				auto filename = GetFilenameFromPath(str, true);
+				std::string newDir = subdir;
+				std::string safe;
+				auto n = obs_data_item_get_name(item);
+				if (n && GetFileSafeName(n, safe)) {
+					newDir += safe;
+					newDir += "/";
+				}
+				auto fullNewDir = dir + newDir;
+				os_mkdirs(fullNewDir.c_str());
+				auto newFile = fullNewDir + filename;
+				if (os_file_exists(newFile.c_str())) {
+					os_unlink(newFile.c_str());
+				}
+				if (os_copyfile(str.c_str(), newFile.c_str()) ==
+				    0) {
+					newFile = newDir + filename;
+					if (local_url) {
+						str = "file://";
+						str += newFile.c_str();
+					} else {
+						str = newFile.c_str();
+					}
+					obs_data_item_set_string(&item,
+								 str.c_str());
+					item = obs_data_first(data);
+					continue;
+				}
+			}
+		} else if (type == OBS_DATA_OBJECT) {
+			if (obs_data_t *obj = obs_data_item_get_obj(item)) {
+				std::string newDir = subdir;
+				std::string safe;
+				auto n = obs_data_item_get_name(item);
+				if (n && GetFileSafeName(n, safe)) {
+					newDir += safe;
+					newDir += "/";
+				}
+				export_local_files(obj, dir, newDir);
+				obs_data_release(obj);
+			}
+		} else if (type == OBS_DATA_ARRAY) {
+			std::string newDir = dir;
+			newDir += obs_data_item_get_name(item);
+			newDir += "/";
+			const auto array = obs_data_item_get_array(item);
+			const auto count = obs_data_array_count(array);
+			for (size_t i = 0; i < count; i++) {
+				if (obs_data_t *obj =
+					    obs_data_array_item(array, i)) {
+					std::string newDir = subdir;
+					std::string safe;
+					auto n = obs_data_item_get_name(item);
+					if (n && GetFileSafeName(n, safe)) {
+						newDir += safe;
+						newDir += "/";
+					}
+					n = obs_data_get_string(obj, "name");
+					if (n && GetFileSafeName(n, safe)) {
+						newDir += safe;
+						newDir += "/";
+					}
+					export_local_files(obj, dir, newDir);
 					obs_data_release(obj);
 				}
 			}
@@ -569,8 +674,9 @@ void SceneCollectionManagerDialog::on_actionConfigSceneCollection_triggered()
 	auto a = m.addAction(QString::fromUtf8(obs_module_text("Rename")));
 	connect(a, SIGNAL(triggered()), this,
 		SLOT(on_actionRenameSceneCollection_triggered()));
-	//a = m.addAction(QString::fromUtf8(obs_module_text("Export")));
-	//connect(a, SIGNAL(triggered()), this,	SLOT(on_actionExportSceneCollection_triggered()));
+	a = m.addAction(QString::fromUtf8(obs_module_text("Export")));
+	connect(a, SIGNAL(triggered()), this,
+		SLOT(on_actionExportSceneCollection_triggered()));
 	m.exec(QCursor::pos());
 }
 
@@ -637,16 +743,40 @@ void SceneCollectionManagerDialog::on_actionRenameSceneCollection_triggered()
 
 void SceneCollectionManagerDialog::on_actionExportSceneCollection_triggered()
 {
-	if (const auto item = ui->sceneCollectionList->currentItem()) {
-		const auto filename = scene_collections.at(item->text());
-		if (!filename.length())
-			return;
-		const QString file = QFileDialog::getSaveFileName(
-			this, obs_module_text("ExportSceneCollection"), "",
-			"Scene Collection Zip (*.scz)");
-		if (file.isEmpty())
-			return;
+	const auto item = ui->sceneCollectionList->currentItem();
+	if (!item)
+		return;
+	const auto filename = scene_collections.at(item->text());
+	if (!filename.length())
+		return;
+	const QString file = QFileDialog::getSaveFileName(
+		this, obs_module_text("ExportSceneCollection"), "",
+		"Scene Collection (*.json)");
+	if (file.isEmpty())
+		return;
+
+	auto data =
+		obs_data_create_from_json_file_safe(filename.c_str(), "bak");
+	auto f = file.toUtf8();
+	std::string dir = f.constData();
+	auto slash = dir.find_last_of("/\\");
+	if (slash != std::string::npos) {
+		auto point = dir.find_last_of('.');
+		if (point != std::string::npos && point > slash) {
+			dir = dir.substr(0, point);
+			dir += "/";
+		} else {
+			dir = dir.substr(0, slash + 1);
+		}
 	}
+	slash = dir.find('\\');
+	while (slash != std::string::npos) {
+		dir.replace(slash, slash + 1, "/");
+		slash = dir.find('\\');
+	}
+	export_local_files(data, dir, "");
+	obs_data_save_json(data, f.constData());
+	obs_data_release(data);
 }
 
 void SceneCollectionManagerDialog::on_actionSwitchSceneCollection_triggered()
