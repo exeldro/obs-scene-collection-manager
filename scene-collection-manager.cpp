@@ -391,6 +391,8 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			os_unlink(tempPath.c_str());
 		}
 		obs_data_release(data);
+		if(autoSaveBackup)
+			BackupSceneCollection();
 	}
 }
 
