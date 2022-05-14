@@ -9,6 +9,7 @@
 #include <QInputDialog>
 #include <QUrl>
 #include <wctype.h>
+#include <sys/stat.h>
 
 #include "obs-frontend-api.h"
 #include "obs-module.h"
@@ -24,6 +25,8 @@ OBS_MODULE_USE_DEFAULT_LOCALE("scene-collection-manager", "en-US")
 static obs_hotkey_id sceneCollectionManagerDialog_hotkey_id =
 	OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id load_last_backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id load_first_backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
 SceneCollectionManagerDialog *sceneCollectionManagerDialog = nullptr;
 
 static bool autoSaveBackup = false;
@@ -174,6 +177,108 @@ std::string GetBackupDirectory(std::string filename)
 	return dir;
 }
 
+void LoadBackupSceneCollection(const std::string sceneCollection,
+			       const std::string filename,
+			       const std::string backupFile)
+{
+	if (!filename.length())
+		return;
+
+	const auto backupDir = GetBackupDirectory(filename);
+	auto *data = obs_data_create_from_json_file(backupFile.c_str());
+	obs_data_set_string(data, "name", sceneCollection.c_str());
+	obs_data_save_json_safe(data, filename.c_str(), "tmp", "bak");
+	obs_data_release(data);
+	if (strcmp(obs_frontend_get_current_scene_collection(),
+		   sceneCollection.c_str()) == 0) {
+		config_set_string(obs_frontend_get_global_config(), "Basic",
+				  "SceneCollection", "");
+		config_set_string(obs_frontend_get_global_config(), "Basic",
+				  "SceneCollectionFile",
+				  "scene_collection_manager_temp");
+		obs_frontend_set_current_scene_collection(
+			sceneCollection.c_str());
+		std::string path = obs_module_config_path(
+			"../../basic/scenes/scene_collection_manager_temp.json");
+		os_unlink(path.c_str());
+	} else {
+		obs_frontend_set_current_scene_collection(
+			sceneCollection.c_str());
+	}
+}
+
+void LoadBackupSceneCollection(bool last)
+{
+	const auto config = obs_frontend_get_global_config();
+	if (!config)
+		return;
+	const std::string sceneCollection =
+		config_get_string(config, "Basic", "SceneCollection");
+	const std::string filename =
+		config_get_string(config, "Basic", "SceneCollectionFile");
+	std::string path = obs_module_config_path("../../basic/scenes/");
+	path += filename;
+	path += ".json";
+
+	const auto backupDir = GetBackupDirectory(path);
+	const auto f = backupDir + "*.json";
+	os_glob_t *glob;
+	if (os_glob(f.c_str(), 0, &glob) != 0) {
+		return;
+	}
+	std::string backupFile;
+	time_t time = 0;
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		const char *filePath = glob->gl_pathv[i].path;
+
+		if (glob->gl_pathv[i].directory)
+			continue;
+
+		struct stat stats {
+		};
+		if (os_stat(filePath, &stats) == 0 && stats.st_size > 0) {
+			if (last) {
+				if (time == 0 || stats.st_ctime >= time) {
+					backupFile = filePath;
+					time = stats.st_ctime;
+				}
+			} else {
+				if (time == 0 || stats.st_ctime <= time) {
+					backupFile = filePath;
+					time = stats.st_ctime;
+				}
+			}
+		}
+	}
+	os_globfree(glob);
+	if (time != 0)
+		LoadBackupSceneCollection(sceneCollection, path, backupFile);
+}
+
+void LoadLastBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
+					 obs_hotkey_t *hotkey, bool pressed)
+{
+	if (!pressed)
+		return;
+	const auto main =
+		static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	QMetaObject::invokeMethod(
+		main, [] { LoadBackupSceneCollection(true); },
+		Qt::QueuedConnection);
+}
+
+void LoadFirstBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
+					  obs_hotkey_t *hotkey, bool pressed)
+{
+	if (!pressed)
+		return;
+	const auto main =
+		static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	QMetaObject::invokeMethod(
+		main, [] { LoadBackupSceneCollection(false); },
+		Qt::QueuedConnection);
+}
+
 static void frontend_event(obs_frontend_event event, void *)
 {
 	if (event == OBS_FRONTEND_EVENT_EXIT) {
@@ -185,6 +290,15 @@ static void frontend_event(obs_frontend_event event, void *)
 		obs_data_array_release(hotkey_save_array);
 		hotkey_save_array = obs_hotkey_save(backup_hotkey_id);
 		obs_data_set_array(save_data, "backupHotkey",
+				   hotkey_save_array);
+		obs_data_array_release(hotkey_save_array);
+		hotkey_save_array = obs_hotkey_save(load_last_backup_hotkey_id);
+		obs_data_set_array(save_data, "loadLastBackupHotkey",
+				   hotkey_save_array);
+		obs_data_array_release(hotkey_save_array);
+		hotkey_save_array =
+			obs_hotkey_save(load_first_backup_hotkey_id);
+		obs_data_set_array(save_data, "loadFirstBackupHotkey",
 				   hotkey_save_array);
 		obs_data_array_release(hotkey_save_array);
 		auto d = obs_data_get_json(save_data);
@@ -221,6 +335,16 @@ bool obs_module_load()
 		obs_module_text("BackupSceneCollection"),
 		BackupSceneCollectionHotkey, nullptr);
 
+	load_last_backup_hotkey_id = obs_hotkey_register_frontend(
+		"load_last_backup_scene_collection",
+		obs_module_text("LoadLastBackupSceneCollection"),
+		LoadLastBackupSceneCollectionHotkey, nullptr);
+
+	load_first_backup_hotkey_id = obs_hotkey_register_frontend(
+		"load_first_backup_scene_collection",
+		obs_module_text("LoadFirstBackupSceneCollection"),
+		LoadFirstBackupSceneCollectionHotkey, nullptr);
+
 	auto config = obs_frontend_get_global_config();
 	autoSaveBackup = config_get_bool(config, "SceneCollectionManager",
 					 "AutoSaveBackup");
@@ -246,6 +370,19 @@ bool obs_module_load()
 			obs_hotkey_load(backup_hotkey_id, hotkey_save_array);
 			obs_data_array_release(hotkey_save_array);
 
+			hotkey_save_array = obs_data_get_array(
+				save_data, "loadLastBackupHotkey");
+			obs_hotkey_load(load_last_backup_hotkey_id,
+					hotkey_save_array);
+			obs_data_array_release(hotkey_save_array);
+
+			
+			hotkey_save_array = obs_data_get_array(
+				save_data, "loadFirstBackupHotkey");
+			obs_hotkey_load(load_first_backup_hotkey_id,
+					hotkey_save_array);
+			obs_data_array_release(hotkey_save_array);
+
 			obs_data_release(save_data);
 		}
 	}
@@ -262,6 +399,8 @@ void obs_module_unload()
 	obs_frontend_remove_save_callback(frontend_save_load, nullptr);
 	obs_hotkey_unregister(sceneCollectionManagerDialog_hotkey_id);
 	obs_hotkey_unregister(backup_hotkey_id);
+	obs_hotkey_unregister(load_first_backup_hotkey_id);
+	obs_hotkey_unregister(load_last_backup_hotkey_id);
 }
 
 MODULE_EXPORT const char *obs_module_description(void)
@@ -391,8 +530,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			os_unlink(tempPath.c_str());
 		}
 		obs_data_release(data);
-		if(autoSaveBackup)
-			BackupSceneCollection();
+		BackupSceneCollection();
 	}
 }
 
@@ -1011,32 +1149,9 @@ void SceneCollectionManagerDialog::on_actionSwitchBackup_triggered()
 				return;
 
 			const auto backupFile = backupDir + safeName + ".json";
-			auto *data = obs_data_create_from_json_file(
-				backupFile.c_str());
-			obs_data_set_string(data, "name",
-					    item->text().toUtf8().constData());
-			obs_data_save_json_safe(data, filename.c_str(), "tmp",
-						"bak");
-			obs_data_release(data);
-			const QString currentSceneCollection = QString::fromUtf8(
-				obs_frontend_get_current_scene_collection());
-			if (currentSceneCollection == item->text()) {
-				config_set_string(
-					obs_frontend_get_global_config(),
-					"Basic", "SceneCollection", "");
-				config_set_string(
-					obs_frontend_get_global_config(),
-					"Basic", "SceneCollectionFile",
-					"scene_collection_manager_temp");
-				obs_frontend_set_current_scene_collection(
-					item->text().toUtf8().constData());
-				std::string path = obs_module_config_path(
-					"../../basic/scenes/scene_collection_manager_temp.json");
-				os_unlink(path.c_str());
-			} else {
-				obs_frontend_set_current_scene_collection(
-					item->text().toUtf8().constData());
-			}
+			LoadBackupSceneCollection(
+				item->text().toUtf8().constData(), filename,
+				backupFile);
 		}
 	}
 }
@@ -1076,6 +1191,7 @@ void SceneCollectionManagerDialog::on_sceneCollectionList_currentRowChanged(
 			ui->backupList->addItem(
 				QString::fromUtf8(name.c_str()));
 		}
+		os_globfree(glob);
 	}
 }
 
@@ -1123,6 +1239,7 @@ void SceneCollectionManagerDialog::ReadSceneCollections()
 		}
 		scene_collections[QString::fromUtf8(name.c_str())] = filePath;
 	}
+	os_globfree(glob);
 }
 
 SceneCollectionManagerDialog::SceneCollectionManagerDialog(QMainWindow *parent)
