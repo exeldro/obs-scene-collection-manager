@@ -22,6 +22,8 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Exeldro");
 OBS_MODULE_USE_DEFAULT_LOCALE("scene-collection-manager", "en-US")
 
+#define MAX_PATH 260
+
 static obs_hotkey_id sceneCollectionManagerDialog_hotkey_id =
 	OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
@@ -376,7 +378,6 @@ bool obs_module_load()
 					hotkey_save_array);
 			obs_data_array_release(hotkey_save_array);
 
-			
 			hotkey_save_array = obs_data_get_array(
 				save_data, "loadFirstBackupHotkey");
 			obs_hotkey_load(load_first_backup_hotkey_id,
@@ -466,6 +467,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		"Scene Collection (*.json)");
 	if (files.isEmpty())
 		return;
+	auto path_buffer = (char *)bmalloc(MAX_PATH);
 	auto scene_collections_ = scene_collections;
 	for (auto file : files) {
 
@@ -505,11 +507,11 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			if (point != std::string::npos && point > slash) {
 				dir = dir.substr(0, point);
 				dir += "/";
-				try_fix_paths(data, dir.c_str());
+				try_fix_paths(data, dir.c_str(), path_buffer);
 			}
 			dir = dir.substr(0, slash + 1);
 		}
-		try_fix_paths(data, dir.c_str());
+		try_fix_paths(data, dir.c_str(), path_buffer);
 
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
@@ -532,6 +534,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		obs_data_release(data);
 		BackupSceneCollection();
 	}
+	bfree(path_buffer);
 }
 
 static bool replace(std::string &str, const char *from, const char *to)
@@ -544,7 +547,8 @@ static bool replace(std::string &str, const char *from, const char *to)
 }
 
 void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
-						 const char *dir)
+						 const char *dir,
+						 char *path_buffer)
 {
 	obs_data_item_t *item = obs_data_first(data);
 	while (item) {
@@ -578,11 +582,41 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 					if (os_file_exists(newFile.c_str())) {
 						if (local_url) {
 							str = "file://";
-							str += os_get_abs_path_ptr(
-								newFile.c_str());
+							if (os_get_abs_path(
+								    newFile.c_str(),
+								    path_buffer,
+								    MAX_PATH)) {
+								for (auto i = 0;
+								     path_buffer
+									     [i] !=
+								     '\0';
+								     i++)
+									if (path_buffer
+										    [i] ==
+									    '\\')
+										path_buffer[i] =
+											'/';
+								str += path_buffer;
+							}
 						} else {
-							str = os_get_abs_path_ptr(
-								newFile.c_str());
+							if (os_get_abs_path(
+								    newFile.c_str(),
+								    path_buffer,
+								    MAX_PATH)) {
+								for (auto i = 0;
+								     path_buffer
+									     [i] !=
+								     '\0';
+								     i++)
+									if (path_buffer
+										    [i] ==
+									    '\\')
+										path_buffer[i] =
+											'/';
+								str = path_buffer;
+							} else {
+								str = "";
+							}
 						}
 						obs_data_item_set_string(
 							&item, str.c_str());
@@ -607,7 +641,7 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 			}
 		} else if (type == OBS_DATA_OBJECT) {
 			if (obs_data_t *obj = obs_data_item_get_obj(item)) {
-				try_fix_paths(obj, dir);
+				try_fix_paths(obj, dir, path_buffer);
 				obs_data_release(obj);
 			}
 		} else if (type == OBS_DATA_ARRAY) {
@@ -616,7 +650,7 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 			for (size_t i = 0; i < count; i++) {
 				if (obs_data_t *obj =
 					    obs_data_array_item(array, i)) {
-					try_fix_paths(obj, dir);
+					try_fix_paths(obj, dir, path_buffer);
 					obs_data_release(obj);
 				}
 			}
@@ -1034,11 +1068,16 @@ void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 		m.addMenu(QString::fromUtf8(obs_module_text("BackupDir")));
 	a = dirMenu->addAction(QString::fromUtf8(obs_module_text("ShowDir")));
 	connect(a, &QAction::triggered, [] {
-		const QUrl url = QUrl::fromLocalFile(QString::fromUtf8(
-			customBackupDir.empty()
-				? os_get_abs_path_ptr(obs_module_config_path(
-					  "../../basic/scenes/"))
-				: customBackupDir.c_str()));
+		QUrl url;
+		if (customBackupDir.empty()) {
+			auto ptr = os_get_abs_path_ptr(
+				obs_module_config_path("../../basic/scenes/"));
+			url = QUrl::fromLocalFile(QString::fromUtf8(ptr));
+			bfree(ptr);
+		} else {
+			url = QUrl::fromLocalFile(
+				QString::fromUtf8(customBackupDir.c_str()));
+		}
 		QDesktopServices::openUrl(url);
 	});
 
