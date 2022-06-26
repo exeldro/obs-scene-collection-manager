@@ -98,6 +98,8 @@ static void BackupSceneCollection()
 	if (!currentSceneCollection || strlen(currentSceneCollection) < 1)
 		return;
 
+	obs_frontend_save();
+
 	std::string currentSafeName;
 	if (!GetFileSafeName(currentSceneCollection, currentSafeName))
 		return;
@@ -179,6 +181,24 @@ std::string GetBackupDirectory(std::string filename)
 	return dir;
 }
 
+bool activate_dshow_proc(void *p, obs_source_t *source)
+{
+	if (strcmp(obs_source_get_unversioned_id(source), "dshow_input") != 0)
+		return true;
+	const bool active = *(bool *)p;
+	calldata_t cd = {};
+	calldata_set_bool(&cd, "active", active);
+	proc_handler_t *ph = obs_source_get_proc_handler(source);
+	proc_handler_call(ph, "activate", &cd);
+	calldata_free(&cd);
+	return true;
+}
+
+void activate_dshow(bool active)
+{
+	obs_enum_sources(activate_dshow_proc, &active);
+}
+
 void LoadBackupSceneCollection(const std::string sceneCollection,
 			       const std::string filename,
 			       const std::string backupFile)
@@ -191,6 +211,7 @@ void LoadBackupSceneCollection(const std::string sceneCollection,
 	obs_data_set_string(data, "name", sceneCollection.c_str());
 	obs_data_save_json_safe(data, filename.c_str(), "tmp", "bak");
 	obs_data_release(data);
+	activate_dshow(false);
 	if (strcmp(obs_frontend_get_current_scene_collection(),
 		   sceneCollection.c_str()) == 0) {
 		config_set_string(obs_frontend_get_global_config(), "Basic",
@@ -207,6 +228,7 @@ void LoadBackupSceneCollection(const std::string sceneCollection,
 		obs_frontend_set_current_scene_collection(
 			sceneCollection.c_str());
 	}
+	activate_dshow(true);
 }
 
 void LoadBackupSceneCollection(bool last)
@@ -831,12 +853,26 @@ void SceneCollectionManagerDialog::on_actionRemoveSceneCollection_triggered()
 	if (reinterpret_cast<QAbstractButton *>(yes) != remove.clickedButton())
 		return;
 	for (auto &item : items) {
-		const auto filePath = scene_collections.at(item->text());
+		auto filePath = scene_collections.at(item->text());
 		if (filePath.length() == 0)
 			continue;
-
+		filePath = os_get_abs_path_ptr(filePath.c_str());
 		os_unlink(filePath.c_str());
-		os_rmdir(GetBackupDirectory(filePath).c_str());
+		auto backupDir = GetBackupDirectory(filePath);
+		const auto f = backupDir + "*.json";
+		os_glob_t *glob;
+		if (os_glob(f.c_str(), 0, &glob) == 0) {
+			for (size_t i = 0; i < glob->gl_pathc; i++) {
+				const char *backupFilePath =
+					glob->gl_pathv[i].path;
+
+				if (glob->gl_pathv[i].directory)
+					continue;
+				os_unlink(backupFilePath);
+			}
+			os_globfree(glob);
+		}
+		os_rmdir(backupDir.c_str());
 		scene_collections.erase(item->text());
 	}
 	RefreshSceneCollections();
@@ -958,7 +994,9 @@ void SceneCollectionManagerDialog::on_actionSwitchSceneCollection_triggered()
 	if (const auto item = ui->sceneCollectionList->currentItem()) {
 		auto t = item->text().toUtf8();
 		auto c = t.constData();
+		activate_dshow(false);
 		obs_frontend_set_current_scene_collection(c);
+		activate_dshow(true);
 	}
 }
 
