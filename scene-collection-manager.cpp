@@ -51,6 +51,9 @@ void ShowSceneCollectionManagerDialog()
 void SceneCollectionManagerHotkey(void *data, obs_hotkey_id id,
 				  obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(data);
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 
@@ -140,6 +143,9 @@ static void BackupSceneCollection()
 void BackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 				 obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(data);
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 
@@ -258,8 +264,7 @@ void LoadBackupSceneCollection(bool last)
 		if (glob->gl_pathv[i].directory)
 			continue;
 
-		struct stat stats {
-		};
+		struct stat stats {};
 		if (os_stat(filePath, &stats) == 0 && stats.st_size > 0) {
 			if (last) {
 				if (time == 0 || stats.st_ctime >= time) {
@@ -282,6 +287,9 @@ void LoadBackupSceneCollection(bool last)
 void LoadLastBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 					 obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(data);
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	const auto main =
@@ -294,6 +302,9 @@ void LoadLastBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 void LoadFirstBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
 					  obs_hotkey_t *hotkey, bool pressed)
 {
+	UNUSED_PARAMETER(data);
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
 	if (!pressed)
 		return;
 	const auto main =
@@ -450,7 +461,7 @@ void SceneCollectionManagerDialog::RefreshSceneCollections()
 						 ui->sceneCollectionList);
 		ui->sceneCollectionList->addItem(item);
 		if (scene_collection.first == current_scene_collection) {
-			ui->sceneCollectionList->setItemSelected(item, true);
+			item->setSelected(true);
 			ui->sceneCollectionList->setCurrentItem(item);
 		}
 	}
@@ -459,6 +470,7 @@ void SceneCollectionManagerDialog::RefreshSceneCollections()
 void SceneCollectionManagerDialog::on_searchSceneCollectionEdit_textChanged(
 	const QString &text)
 {
+	UNUSED_PARAMETER(text);
 	RefreshSceneCollections();
 }
 
@@ -1097,9 +1109,8 @@ void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 	connect(a, &QAction::triggered, [] {
 		autoSaveBackup = !autoSaveBackup;
 		const auto config = obs_frontend_get_global_config();
-		config_set_bool(obs_frontend_get_global_config(),
-				"SceneCollectionManager", "AutoSaveBackup",
-				autoSaveBackup);
+		config_set_bool(config, "SceneCollectionManager",
+				"AutoSaveBackup", autoSaveBackup);
 	});
 
 	auto dirMenu =
@@ -1275,6 +1286,7 @@ void SceneCollectionManagerDialog::on_sceneCollectionList_currentRowChanged(
 void SceneCollectionManagerDialog::on_sceneCollectionList_itemDoubleClicked(
 	QListWidgetItem *item)
 {
+	UNUSED_PARAMETER(item);
 	QMetaObject::invokeMethod(this,
 				  "on_actionSwitchSceneCollection_triggered",
 				  Qt::QueuedConnection);
@@ -1283,6 +1295,7 @@ void SceneCollectionManagerDialog::on_sceneCollectionList_itemDoubleClicked(
 void SceneCollectionManagerDialog::on_backupList_itemDoubleClicked(
 	QListWidgetItem *item)
 {
+	UNUSED_PARAMETER(item);
 	QMetaObject::invokeMethod(this, "on_actionSwitchBackup_triggered",
 				  Qt::QueuedConnection);
 }
