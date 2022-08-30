@@ -8,6 +8,11 @@ endif()
 
 project(scene-collection-manager VERSION 0.0.8)
 set(PROJECT_FULL_NAME "Scene Collection Manager")
+
+# Set new UUIDs when you start to create a new plugin.
+set(MACOS_PACKAGE_UUID "6E8A9828-CC0C-42BB-BD0F-848F4418EB9E")
+set(MACOS_INSTALLER_UUID "24FDDDB9-1F76-4799-9E18-EE77FF01739C")
+
 add_library(${PROJECT_NAME} MODULE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
