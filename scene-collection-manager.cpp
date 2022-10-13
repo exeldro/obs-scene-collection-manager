@@ -192,6 +192,12 @@ bool activate_dshow_proc(void *p, obs_source_t *source)
 	if (strcmp(obs_source_get_unversioned_id(source), "dshow_input") != 0)
 		return true;
 	const bool active = *(bool *)p;
+	obs_data_t *settings = obs_source_get_settings(source);
+	if(active == obs_data_get_bool(settings, "active")) {
+		obs_data_release(settings);
+		return true;
+	}
+	obs_data_release(settings);
 	calldata_t cd = {};
 	calldata_set_bool(&cd, "active", active);
 	proc_handler_t *ph = obs_source_get_proc_handler(source);
@@ -342,13 +348,17 @@ static void frontend_event(obs_frontend_event event, void *)
 				  "SceneCollectionManager", "HotkeyData",
 				  data.toBase64().constData());
 		obs_data_release(save_data);
+	} else if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED) {
+		activate_dshow(true);
 	}
 }
 
 static void frontend_save_load(obs_data_t *, bool saving, void *)
 {
-	if (!saving && autoSaveBackup) {
-		BackupSceneCollection();
+	if (!saving) {
+		if (autoSaveBackup)
+			BackupSceneCollection();
+		activate_dshow(true);
 	}
 }
 
