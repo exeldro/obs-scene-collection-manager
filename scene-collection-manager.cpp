@@ -108,6 +108,10 @@ static void BackupSceneCollection()
 		return;
 
 	std::string path = obs_module_config_path("../../basic/scenes/");
+	std::string path_abs = os_get_abs_path_ptr(path.c_str());
+	if (path_abs.back() != '/' && path_abs.back() != '\\') {
+		path_abs += "/";
+	}
 
 	std::string backupName = os_generate_formatted_filename(
 		"", true, "%CCYY-%MM-%DD %hh:%mm:%ss");
@@ -117,7 +121,7 @@ static void BackupSceneCollection()
 	if (!GetFileSafeName(backupName.c_str(), safeName))
 		return;
 
-	std::string backupDir = path;
+	std::string backupDir = path_abs;
 	if (!customBackupDir.empty()) {
 		backupDir = customBackupDir;
 	}
@@ -128,7 +132,7 @@ static void BackupSceneCollection()
 	backupDir += "/";
 	os_mkdirs(backupDir.c_str());
 
-	std::string filename = path;
+	std::string filename = path_abs;
 	filename += currentSafeName;
 	filename += ".json";
 
@@ -193,7 +197,7 @@ bool activate_dshow_proc(void *p, obs_source_t *source)
 		return true;
 	const bool active = *(bool *)p;
 	obs_data_t *settings = obs_source_get_settings(source);
-	if(active == obs_data_get_bool(settings, "active")) {
+	if (active == obs_data_get_bool(settings, "active")) {
 		obs_data_release(settings);
 		return true;
 	}
@@ -235,7 +239,8 @@ void LoadBackupSceneCollection(const std::string sceneCollection,
 			sceneCollection.c_str());
 		std::string path = obs_module_config_path(
 			"../../basic/scenes/scene_collection_manager_temp.json");
-		os_unlink(path.c_str());
+		std::string path_abs = os_get_abs_path_ptr(path.c_str());
+		os_unlink(path_abs.c_str());
 	} else {
 		obs_frontend_set_current_scene_collection(
 			sceneCollection.c_str());
@@ -255,8 +260,9 @@ void LoadBackupSceneCollection(bool last)
 	std::string path = obs_module_config_path("../../basic/scenes/");
 	path += filename;
 	path += ".json";
+	std::string path_abs = os_get_abs_path_ptr(path.c_str());
 
-	const auto backupDir = GetBackupDirectory(path);
+	const auto backupDir = GetBackupDirectory(path_abs);
 	const auto f = backupDir + "*.json";
 	os_glob_t *glob;
 	if (os_glob(f.c_str(), 0, &glob) != 0) {
@@ -287,7 +293,8 @@ void LoadBackupSceneCollection(bool last)
 	}
 	os_globfree(glob);
 	if (time != 0)
-		LoadBackupSceneCollection(sceneCollection, path, backupFile);
+		LoadBackupSceneCollection(sceneCollection, path_abs,
+					  backupFile);
 }
 
 void LoadLastBackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
@@ -561,7 +568,8 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			obs_module_config_path("../../basic/scenes/");
 		path += safeName;
 		path += ".json";
-		obs_data_save_json_safe(data, path.c_str(), "tmp", "bak");
+		std::string path_abs = os_get_abs_path_ptr(path.c_str());
+		obs_data_save_json_safe(data, path_abs.c_str(), "tmp", "bak");
 
 		if (replace_current) {
 			config_set_string(obs_frontend_get_global_config(),
@@ -821,6 +829,10 @@ void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
 
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
+		std::string path_abs = os_get_abs_path_ptr(path.c_str());
+		if (path_abs.back() != '/' && path_abs.back() != '\\') {
+			path_abs += "/";
+		}
 
 		const auto t = text.toUtf8();
 		const auto c = t.constData();
@@ -831,7 +843,7 @@ void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
 			filename.c_str(), "bak");
 		obs_data_set_string(data, "name", text.toUtf8().constData());
 
-		std::string filePath = path;
+		std::string filePath = path_abs;
 		filePath += safeName;
 		filePath += ".json";
 		obs_data_save_json(data, filePath.c_str());
@@ -843,7 +855,7 @@ void SceneCollectionManagerDialog::on_actionDuplicateSceneCollection_triggered()
 				  "SceneCollectionFile",
 				  "scene_collection_manager_temp");
 		obs_frontend_set_current_scene_collection(c);
-		std::string tempPath = path;
+		std::string tempPath = path_abs;
 		tempPath += "scene_collection_manager_temp.json";
 		os_unlink(tempPath.c_str());
 	}
@@ -934,8 +946,12 @@ void SceneCollectionManagerDialog::on_actionRenameSceneCollection_triggered()
 
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
+		std::string path_abs = os_get_abs_path_ptr(path.c_str());
+		if (path_abs.back() != '/' && path_abs.back() != '\\') {
+			path_abs += "/";
+		}
 
-		std::string filePath = path;
+		std::string filePath = path_abs;
 		filePath += safeName;
 		filePath += ".json";
 
@@ -1313,8 +1329,10 @@ void SceneCollectionManagerDialog::on_backupList_itemDoubleClicked(
 void SceneCollectionManagerDialog::ReadSceneCollections()
 {
 	std::string path = obs_module_config_path("../../basic/scenes/*.json");
+	std::string path_abs = os_get_abs_path_ptr(path.c_str());
 	os_glob_t *glob;
-	if (os_glob(path.c_str(), 0, &glob) != 0) {
+	if (os_glob(path.c_str(), 0, &glob) != 0 &&
+	    os_glob(path_abs.c_str(), 0, &glob) != 0) {
 		blog(LOG_WARNING, "Failed to glob scene collections");
 		return;
 	}
