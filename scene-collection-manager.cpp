@@ -518,7 +518,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		"Scene Collection (*.json)");
 	if (files.isEmpty())
 		return;
-	auto path_buffer = (char *)bmalloc(MAX_PATH);
+	char path_buffer[MAX_PATH];
 	auto scene_collections_ = scene_collections;
 	for (auto file : files) {
 
@@ -562,6 +562,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 			}
 			dir = dir.substr(0, slash + 1);
 		}
+		import_parts(data, dir.c_str());
 		try_fix_paths(data, dir.c_str(), path_buffer);
 
 		std::string path =
@@ -586,7 +587,6 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		obs_data_release(data);
 		BackupSceneCollection();
 	}
-	bfree(path_buffer);
 }
 
 static bool replace(std::string &str, const char *from, const char *to)
@@ -596,6 +596,95 @@ static bool replace(std::string &str, const char *from, const char *to)
 		return false;
 	str.replace(start_pos, strlen(from), to);
 	return true;
+}
+
+void SceneCollectionManagerDialog::import_parts(obs_data_t *data,
+						const char *dir)
+{
+	obs_data_array_t *a = obs_data_get_array(data, "imports");
+	if (!a)
+		return;
+	size_t count = obs_data_array_count(a);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *item = obs_data_array_item(a, i);
+		if (!item)
+			continue;
+		const char *file = obs_data_get_string(item, "file");
+		obs_data_t *file_data = nullptr;
+		if (!file || !strlen(file)) {
+			obs_data_release(item);
+			continue;
+		}
+		if (os_file_exists(file)) {
+			file_data = obs_data_create_from_json_file(file);
+		}
+		if (!file_data) {
+			std::string newFile = dir;
+			newFile += file;
+			if (os_file_exists(newFile.c_str())) {
+				file_data = obs_data_create_from_json_file(
+					newFile.c_str());
+			}
+		}
+		if (!file_data) {
+			obs_data_release(item);
+			continue;
+		}
+		obs_data_item_t *item2 = obs_data_first(file_data);
+		while (item2) {
+			if (obs_data_item_gettype(item2) != OBS_DATA_ARRAY) {
+				obs_data_item_next(&item2);
+				continue;
+			}
+			obs_data_array_t *fa = obs_data_item_get_array(item2);
+			obs_data_array_t *da = obs_data_get_array(
+				data, obs_data_item_get_name(item2));
+			if (!da) {
+				da = obs_data_array_create();
+				obs_data_set_array(
+					data, obs_data_item_get_name(item2),
+					da);
+			}
+			size_t c = obs_data_array_count(fa);
+			for (size_t j = 0; j < c; j++) {
+				obs_data_t *fi = obs_data_array_item(fa, j);
+				if (!fi)
+					continue;
+				const char *name =
+					obs_data_get_string(fi, "name");
+				if (!name || !strlen(name)) {
+					obs_data_release(fi);
+					continue;
+				}
+				bool found = false;
+				size_t c2 = obs_data_array_count(da);
+				for (size_t k = 0; k < c2; k++) {
+					obs_data_t *di =
+						obs_data_array_item(da, k);
+					if (!di)
+						continue;
+					if (strcmp(obs_data_get_string(di,
+								       "name"),
+						   name) == 0) {
+						obs_data_array_erase(da, k);
+						obs_data_array_insert(da, k,
+								      fi);
+						found = true;
+						break;
+					}
+
+					obs_data_release(di);
+				}
+				if (!found) {
+					obs_data_array_push_back(da, fi);
+				}
+				obs_data_release(fi);
+			}
+			obs_data_item_next(&item2);
+		}
+		obs_data_release(file_data);
+		obs_data_release(item);
+	}
 }
 
 void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
@@ -618,7 +707,8 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 				local_url = true;
 			}
 			std::size_t found = str.find_last_of("/\\");
-			if (found != std::string::npos &&
+			if (str.length() < MAX_PATH &&
+			    found != std::string::npos &&
 			    !os_file_exists(str.c_str())) {
 				while (found != std::string::npos) {
 					auto file =

@@ -15,8 +15,11 @@ private:
 	std::map<QString, std::string> scene_collections;
 	void ReadSceneCollections();
 	void RefreshSceneCollections();
-	void try_fix_paths(obs_data_t *data, const char *dir, char *path_buffer);
-	void export_local_files(obs_data_t *data, std::string dir, std::string subdir);
+	void import_parts(obs_data_t *data, const char *dir);
+	void try_fix_paths(obs_data_t *data, const char *dir,
+			   char *path_buffer);
+	void export_local_files(obs_data_t *data, std::string dir,
+				std::string subdir);
 private slots:
 	void on_searchSceneCollectionEdit_textChanged(const QString &text);
 
