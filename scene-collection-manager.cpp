@@ -565,6 +565,18 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		import_parts(data, dir.c_str());
 		try_fix_paths(data, dir.c_str(), path_buffer);
 
+		bool gdi = false;
+		size_t i = 0;
+		const char *id;
+		while (obs_enum_source_types(i++, &id)) {
+			if (strcmp(id, "text_gdiplus") == 0) {
+				gdi = true;
+				break;
+			}
+		}
+		if (!gdi)
+			replace_gdi_with_ft2(data);
+
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
 		path += safeName;
@@ -798,6 +810,124 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 			}
 		}
 		obs_data_item_next(&item);
+	}
+}
+
+void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
+{
+	obs_data_array_t *sources = obs_data_get_array(data, "sources");
+	if (!sources)
+		return;
+	std::map<std::string, obs_data_t *> gdi_sources;
+	auto count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+		if (strcmp(obs_data_get_string(s, "id"), "text_gdiplus") == 0) {
+			obs_data_set_string(s, "id", "text_ft2_source");
+			obs_data_set_string(s, "versioned_id",
+					    "text_ft2_source_v2");
+			obs_data_t *settings = obs_data_get_obj(s, "settings");
+			if (settings) {
+				obs_data_set_int(settings, "color1",
+						 obs_data_get_int(settings,
+								  "color"));
+				obs_data_set_int(settings, "color2",
+						 obs_data_get_int(settings,
+								  "color"));
+				if (obs_data_get_bool(settings,
+						      "extents_wrap")) {
+					obs_data_set_int(
+						settings, "custom_width",
+						obs_data_get_int(settings,
+								 "extents_cx"));
+					obs_data_set_bool(settings, "word_wrap",
+							  true);
+				}
+				gdi_sources.emplace(obs_data_get_string(s,
+									"name"),
+						    settings);
+			}
+		} else if (strcmp(obs_data_get_string(s, "id"), "scene") == 0 ||
+			   strcmp(obs_data_get_string(s, "id"), "group") == 0) {
+			obs_data_t *settings = obs_data_get_obj(s, "settings");
+			obs_data_array_t *items =
+				obs_data_get_array(settings, "items");
+			auto item_count = obs_data_array_count(items);
+			for (size_t j = 0; j < item_count; j++) {
+				obs_data_t *item =
+					obs_data_array_item(items, j);
+				if (!item)
+					continue;
+				const char *name =
+					obs_data_get_string(item, "name");
+				auto gdi = gdi_sources.find(name);
+				if (gdi != gdi_sources.end()) {
+					if (obs_data_get_bool(gdi->second,
+							      "extents_wrap")) {
+						obs_data_set_int(
+							item, "bounds_type",
+							OBS_BOUNDS_MAX_ONLY);
+						struct vec2 bounds;
+						bounds.x = obs_data_get_double(
+							gdi->second,
+							"extents_cx");
+						bounds.y = obs_data_get_double(
+							gdi->second,
+							"extents_cy");
+						obs_data_set_vec2(item,
+								  "bounds",
+								  &bounds);
+					} else {
+						struct vec2 scale;
+						obs_data_get_vec2(item,
+								  "scale",
+								  &scale);
+						scale.x *= 9.0f / 11.0f;
+						scale.y *= 9.0f / 11.0f;
+						obs_data_get_vec2(item, "scale",
+								  &scale);
+					}
+					const char *align_str =
+						obs_data_get_string(gdi->second,
+								    "align");
+					const char *valign_str =
+						obs_data_get_string(gdi->second,
+								    "valign");
+					int bounds_align = 0;
+					if (strcmp(align_str, "center") == 0)
+						bounds_align +=
+							OBS_ALIGN_CENTER;
+					else if (strcmp(align_str, "right") ==
+						 0)
+						bounds_align += OBS_ALIGN_RIGHT;
+					else
+						bounds_align += OBS_ALIGN_LEFT;
+
+					if (strcmp(valign_str, "center") == 0)
+						bounds_align +=
+							OBS_ALIGN_CENTER;
+					else if (strcmp(valign_str, "bottom") ==
+						 0)
+						bounds_align +=
+							OBS_ALIGN_BOTTOM;
+					else
+						bounds_align +=
+							OBS_ALIGN_TOP;
+					obs_data_set_int(item, "bounds_align",
+							 bounds_align);
+				}
+				obs_data_release(item);
+			}
+			obs_data_array_release(items);
+			obs_data_release(settings);
+		}
+		obs_data_release(s);
+	}
+	obs_data_array_release(sources);
+	for (const auto &kv : gdi_sources) {
+		obs_data_release(kv.second);
 	}
 }
 

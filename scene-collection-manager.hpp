@@ -18,6 +18,7 @@ private:
 	void import_parts(obs_data_t *data, const char *dir);
 	void try_fix_paths(obs_data_t *data, const char *dir,
 			   char *path_buffer);
+	void replace_gdi_with_ft2(obs_data_t *data);
 	void export_local_files(obs_data_t *data, std::string dir,
 				std::string subdir);
 private slots:
