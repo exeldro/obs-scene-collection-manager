@@ -881,8 +881,7 @@ void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
 								  &bounds);
 					} else {
 						struct vec2 scale;
-						obs_data_get_vec2(item,
-								  "scale",
+						obs_data_get_vec2(item, "scale",
 								  &scale);
 						scale.x *= 9.0f / 11.0f;
 						scale.y *= 9.0f / 11.0f;
@@ -913,8 +912,7 @@ void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
 						bounds_align +=
 							OBS_ALIGN_BOTTOM;
 					else
-						bounds_align +=
-							OBS_ALIGN_TOP;
+						bounds_align += OBS_ALIGN_TOP;
 					obs_data_set_int(item, "bounds_align",
 							 bounds_align);
 				}
@@ -1548,14 +1546,21 @@ void SceneCollectionManagerDialog::on_backupList_itemDoubleClicked(
 
 void SceneCollectionManagerDialog::ReadSceneCollections()
 {
-	std::string path = obs_module_config_path("../../basic/scenes/*.json");
-	std::string path_abs = os_get_abs_path_ptr(path.c_str());
+	char *path = obs_module_config_path("../../basic/scenes/*.json");
+	if (!path) {
+		blog(LOG_WARNING, "Failed to get scene collections path");
+		return;
+	}
+	char *path_abs = os_get_abs_path_ptr(path);
 	os_glob_t *glob;
-	if (os_glob(path.c_str(), 0, &glob) != 0 &&
-	    os_glob(path_abs.c_str(), 0, &glob) != 0) {
+	if (os_glob(path, 0, &glob) != 0 && os_glob(path_abs, 0, &glob) != 0) {
+		bfree(path);
+		bfree(path_abs);
 		blog(LOG_WARNING, "Failed to glob scene collections");
 		return;
 	}
+	bfree(path);
+	bfree(path_abs);
 	scene_collections.clear();
 
 	for (size_t i = 0; i < glob->gl_pathc; i++) {
@@ -1566,14 +1571,23 @@ void SceneCollectionManagerDialog::ReadSceneCollections()
 
 		auto *data =
 			obs_data_create_from_json_file_safe(filePath, "bak");
+		if (!data)
+			continue;
 		std::string name = obs_data_get_string(data, "name");
 		obs_data_release(data);
 
 		/* if no name found, use the file name as the name
 		 * (this only happens when switching to the new version) */
 		if (name.empty()) {
-			name = strrchr(filePath, '/') + 1;
-			name.resize(name.size() - 5);
+			auto p = strrchr(filePath, '/');
+			if (!p)
+				p = strrchr(filePath, '\\');
+			if (p)
+				name = p + 1;
+			else
+				name = filePath;
+			if (name.size() > 5)
+				name.resize(name.size() - 5);
 		}
 		scene_collections[QString::fromUtf8(name.c_str())] = filePath;
 	}
