@@ -896,14 +896,24 @@ void SceneCollectionManagerDialog::replace_os_specific(obs_data_t *data)
 					    "text_ft2_source_v2");
 			obs_data_t *settings = obs_data_get_obj(s, "settings");
 			if (settings) {
-				obs_data_set_int(settings, "color1",
-						 obs_data_get_int(settings,
-								  "color"));
-				obs_data_set_int(settings, "color2",
-						 obs_data_get_int(settings,
-								  "color"));
+				obs_data_set_default_int(settings, "color",
+							 0xFFFFFF);
+				long long color =
+					obs_data_get_int(settings, "color");
+				color = color & 0xFFFFFF;
+				obs_data_set_default_int(settings, "opacity",
+							 100);
+				long long opacity =
+					obs_data_get_int(settings, "opacity");
+				color |= ((opacity * 255 / 100) & 0xFF) << 24;
+				obs_data_set_int(settings, "color1", color);
+				obs_data_set_int(settings, "color2", color);
+				obs_data_set_default_bool(settings,
+							  "extents_wrap", true);
 				if (obs_data_get_bool(settings,
 						      "extents_wrap")) {
+					obs_data_set_default_int(
+						settings, "extents_cx", 100);
 					obs_data_set_int(
 						settings, "custom_width",
 						obs_data_get_int(settings,
