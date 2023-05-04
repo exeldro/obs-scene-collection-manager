@@ -564,18 +564,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		}
 		import_parts(data, dir.c_str());
 		try_fix_paths(data, dir.c_str(), path_buffer);
-
-		bool gdi = false;
-		size_t i = 0;
-		const char *id;
-		while (obs_enum_source_types(i++, &id)) {
-			if (strcmp(id, "text_gdiplus") == 0) {
-				gdi = true;
-				break;
-			}
-		}
-		if (!gdi)
-			replace_gdi_with_ft2(data);
+		replace_os_specific(data);
 
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
@@ -813,7 +802,76 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 	}
 }
 
-void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
+bool SceneCollectionManagerDialog::replace_source(obs_data_t *s, const char *id,
+						  const char *find,
+						  const char *replace, bool cs)
+{
+	if (strcmp(id, find) != 0)
+		return false;
+	obs_data_set_string(s, "id", replace);
+	const char *vid = obs_get_latest_input_type_id(replace);
+	obs_data_set_string(s, "versioned_id", vid ? vid : id);
+	if (cs) {
+		obs_data_t *c = obs_data_create();
+		obs_data_set_obj(s, "settings", c);
+		obs_data_release(c);
+	}
+
+	return true;
+}
+
+void SceneCollectionManagerDialog::make_source_mac(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "game_capture", "syphon-input");
+	replace_source(s, id, "wasapi_input_capture",
+		       "coreaudio_input_capture");
+	replace_source(s, id, "wasapi_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "pulse_input_capture", "coreaudio_input_capture");
+	replace_source(s, id, "pulse_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "jack_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "alsa_input_capture", "coreaudio_input_capture");
+	replace_source(s, id, "dshow_input", "av_capture_input");
+	replace_source(s, id, "v4l2_input", "av_capture_input");
+	replace_source(s, id, "xcomposite_input", "window_capture");
+	replace_source(s, id, "xshm_input", "monitor_capture", false);
+	bfree(id);
+}
+void SceneCollectionManagerDialog::make_source_windows(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "syphon-input", "game_capture");
+	replace_source(s, id, "coreaudio_input_capture",
+		       "wasapi_input_capture");
+	replace_source(s, id, "coreaudio_output_capture",
+		       "wasapi_output_capture");
+	replace_source(s, id, "pulse_input_capture", "wasapi_input_capture");
+	replace_source(s, id, "pulse_output_capture", "wasapi_output_capture");
+	replace_source(s, id, "jack_output_capture", "wasapi_output_capture");
+	replace_source(s, id, "alsa_input_capture", "wasapi_input_capture");
+	replace_source(s, id, "av_capture_input", "dshow_input");
+	replace_source(s, id, "v4l2_input", "dshow_input");
+	replace_source(s, id, "xcomposite_input", "window_capture");
+	bfree(id);
+}
+void SceneCollectionManagerDialog::make_source_linux(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "coreaudio_input_capture", "pulse_input_capture");
+	replace_source(s, id, "coreaudio_output_capture",
+		       "pulse_output_capture");
+	replace_source(s, id, "wasapi_input_capture", "pulse_input_capture");
+	replace_source(s, id, "wasapi_output_capture", "pulse_output_capture");
+	replace_source(s, id, "av_capture_input", "v4l2_input");
+	replace_source(s, id, "dshow_input", "v4l2_input");
+	replace_source(s, id, "window_capture", "xcomposite_input");
+	bfree(id);
+}
+
+void SceneCollectionManagerDialog::replace_os_specific(obs_data_t *data)
 {
 	obs_data_array_t *sources = obs_data_get_array(data, "sources");
 	if (!sources)
@@ -824,6 +882,14 @@ void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
 		obs_data_t *s = obs_data_array_item(sources, i);
 		if (!s)
 			continue;
+#ifdef WIN32
+		make_source_windows(s);
+#elif __APPLE__
+		make_source_mac(s);
+#else
+		make_source_linux(s);
+#endif
+#ifndef WIN32
 		if (strcmp(obs_data_get_string(s, "id"), "text_gdiplus") == 0) {
 			obs_data_set_string(s, "id", "text_ft2_source");
 			obs_data_set_string(s, "versioned_id",
@@ -921,11 +987,28 @@ void SceneCollectionManagerDialog::replace_gdi_with_ft2(obs_data_t *data)
 			obs_data_array_release(items);
 			obs_data_release(settings);
 		}
+#endif
 		obs_data_release(s);
 	}
 	obs_data_array_release(sources);
 	for (const auto &kv : gdi_sources) {
 		obs_data_release(kv.second);
+	}
+	auto globalAudio = {"DesktopAudioDevice1", "DesktopAudioDevice2",
+			    "AuxAudioDevice1",     "AuxAudioDevice2",
+			    "AuxAudioDevice3",     "AuxAudioDevice4"};
+	for (auto ga : globalAudio) {
+		obs_data_t *s = obs_data_get_obj(data, ga);
+		if (!s)
+			continue;
+#ifdef WIN32
+		make_source_windows(s);
+#elif __APPLE__
+		make_source_mac(s);
+#else
+		make_source_linux(s);
+#endif
+		obs_data_release(s);
 	}
 }
 
