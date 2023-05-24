@@ -871,6 +871,55 @@ void SceneCollectionManagerDialog::make_source_linux(obs_data_t *s)
 	bfree(id);
 }
 
+void SceneCollectionManagerDialog::replace_gdi_sceneitem_transform(
+	obs_data_t *item, std::map<std::string, obs_data_t *> gdi_sources)
+{
+	const char *name = obs_data_get_string(item, "name");
+	auto gdi = gdi_sources.find(name);
+	if (gdi == gdi_sources.end())
+		return;
+	struct vec2 scale;
+	obs_data_get_vec2(item, "scale", &scale);
+	scale.x *= 9.0f / 11.0f;
+	scale.y *= 9.0f / 11.0f;
+	if (obs_data_get_bool(gdi->second, "extents_wrap")) {
+		obs_data_set_int(item, "bounds_type", OBS_BOUNDS_MAX_ONLY);
+		struct vec2 bounds;
+		bounds.x = obs_data_get_double(gdi->second, "extents_cx");
+		bounds.y = obs_data_get_double(gdi->second, "extents_cy");
+		if (bounds.y < 2.0) {
+			auto font = obs_data_get_obj(gdi->second, "font");
+			auto font_size = obs_data_get_double(font, "size");
+			obs_data_release(font);
+			bounds.y = font_size;
+		}
+		obs_data_set_vec2(item, "bounds", &bounds);
+	} else {
+		obs_data_set_vec2(item, "scale", &scale);
+	}
+	const char *align_str = obs_data_get_string(gdi->second, "align");
+	const char *valign_str = obs_data_get_string(gdi->second, "valign");
+	int bounds_align = 0;
+	if (strcmp(align_str, "center") == 0) {
+		bounds_align += OBS_ALIGN_CENTER;
+		obs_data_set_int(gdi->second, "custom_width", 0);
+	} else if (strcmp(align_str, "right") == 0) {
+
+		bounds_align += OBS_ALIGN_RIGHT;
+	} else {
+
+		bounds_align += OBS_ALIGN_LEFT;
+	}
+
+	if (strcmp(valign_str, "center") == 0)
+		bounds_align += OBS_ALIGN_CENTER;
+	else if (strcmp(valign_str, "bottom") == 0)
+		bounds_align += OBS_ALIGN_BOTTOM;
+	else
+		bounds_align += OBS_ALIGN_TOP;
+	obs_data_set_int(item, "bounds_align", bounds_align);
+}
+
 void SceneCollectionManagerDialog::replace_os_specific(obs_data_t *data)
 {
 	obs_data_array_t *sources = obs_data_get_array(data, "sources");
@@ -925,82 +974,59 @@ void SceneCollectionManagerDialog::replace_os_specific(obs_data_t *data)
 									"name"),
 						    settings);
 			}
-		} else if (strcmp(obs_data_get_string(s, "id"), "scene") == 0 ||
-			   strcmp(obs_data_get_string(s, "id"), "group") == 0) {
-			obs_data_t *settings = obs_data_get_obj(s, "settings");
-			obs_data_array_t *items =
-				obs_data_get_array(settings, "items");
-			auto item_count = obs_data_array_count(items);
-			for (size_t j = 0; j < item_count; j++) {
-				obs_data_t *item =
-					obs_data_array_item(items, j);
-				if (!item)
-					continue;
-				const char *name =
-					obs_data_get_string(item, "name");
-				auto gdi = gdi_sources.find(name);
-				if (gdi != gdi_sources.end()) {
-					if (obs_data_get_bool(gdi->second,
-							      "extents_wrap")) {
-						obs_data_set_int(
-							item, "bounds_type",
-							OBS_BOUNDS_MAX_ONLY);
-						struct vec2 bounds;
-						bounds.x = obs_data_get_double(
-							gdi->second,
-							"extents_cx");
-						bounds.y = obs_data_get_double(
-							gdi->second,
-							"extents_cy");
-						obs_data_set_vec2(item,
-								  "bounds",
-								  &bounds);
-					} else {
-						struct vec2 scale;
-						obs_data_get_vec2(item, "scale",
-								  &scale);
-						scale.x *= 9.0f / 11.0f;
-						scale.y *= 9.0f / 11.0f;
-						obs_data_get_vec2(item, "scale",
-								  &scale);
-					}
-					const char *align_str =
-						obs_data_get_string(gdi->second,
-								    "align");
-					const char *valign_str =
-						obs_data_get_string(gdi->second,
-								    "valign");
-					int bounds_align = 0;
-					if (strcmp(align_str, "center") == 0)
-						bounds_align +=
-							OBS_ALIGN_CENTER;
-					else if (strcmp(align_str, "right") ==
-						 0)
-						bounds_align += OBS_ALIGN_RIGHT;
-					else
-						bounds_align += OBS_ALIGN_LEFT;
-
-					if (strcmp(valign_str, "center") == 0)
-						bounds_align +=
-							OBS_ALIGN_CENTER;
-					else if (strcmp(valign_str, "bottom") ==
-						 0)
-						bounds_align +=
-							OBS_ALIGN_BOTTOM;
-					else
-						bounds_align += OBS_ALIGN_TOP;
-					obs_data_set_int(item, "bounds_align",
-							 bounds_align);
-				}
-				obs_data_release(item);
-			}
-			obs_data_array_release(items);
-			obs_data_release(settings);
 		}
 #endif
 		obs_data_release(s);
 	}
+#ifndef WIN32
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+		if (strcmp(obs_data_get_string(s, "id"), "scene") != 0 &&
+		    strcmp(obs_data_get_string(s, "id"), "group") != 0) {
+			obs_data_release(s);
+			continue;
+		}
+
+		obs_data_t *settings = obs_data_get_obj(s, "settings");
+		obs_data_array_t *items = obs_data_get_array(settings, "items");
+		obs_data_release(settings);
+		auto item_count = obs_data_array_count(items);
+		for (size_t j = 0; j < item_count; j++) {
+			obs_data_t *item = obs_data_array_item(items, j);
+			if (!item)
+				continue;
+			replace_gdi_sceneitem_transform(item, gdi_sources);
+			obs_data_release(item);
+		}
+		obs_data_array_release(items);
+		obs_data_release(s);
+	}
 	obs_data_array_release(sources);
+
+	sources = obs_data_get_array(data, "groups");
+	count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+		obs_data_t *settings = obs_data_get_obj(s, "settings");
+		obs_data_array_t *items = obs_data_get_array(settings, "items");
+		obs_data_release(settings);
+		auto item_count = obs_data_array_count(items);
+		for (size_t j = 0; j < item_count; j++) {
+			obs_data_t *item = obs_data_array_item(items, j);
+			if (!item)
+				continue;
+			replace_gdi_sceneitem_transform(item, gdi_sources);
+			obs_data_release(item);
+		}
+		obs_data_array_release(items);
+		obs_data_release(s);
+	}
+	obs_data_array_release(sources);
+#endif
 	for (const auto &kv : gdi_sources) {
 		obs_data_release(kv.second);
 	}
