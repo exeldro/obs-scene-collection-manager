@@ -1134,6 +1134,16 @@ void SceneCollectionManagerDialog::on_actionAddBackup_triggered()
 		const auto filename = scene_collections.at(item->text());
 		if (!filename.length())
 			return;
+
+		const auto currentSceneCollection =
+			obs_frontend_get_current_scene_collection();
+		if (currentSceneCollection &&
+		    strlen(currentSceneCollection) > 0 &&
+		    item->text() == QString::fromUtf8(currentSceneCollection)) {
+			obs_frontend_save();
+		}
+		bfree(currentSceneCollection);
+
 		bool ok;
 		std::string defaultName = os_generate_formatted_filename(
 			"", true, "%CCYY-%MM-%DD %hh:%mm:%ss");
