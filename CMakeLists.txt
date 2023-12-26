@@ -6,7 +6,7 @@ else()
   cmake_minimum_required(VERSION 3.18)
 endif()
 
-project(scene-collection-manager VERSION 0.0.9)
+project(scene-collection-manager VERSION 0.1.0)
 set(PROJECT_FULL_NAME "Scene Collection Manager")
 
 # Set new UUIDs when you start to create a new plugin.

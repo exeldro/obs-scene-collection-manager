@@ -8,6 +8,8 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QUrl>
+#include <QSpinBox>
+#include <QWidgetAction>
 #include <wctype.h>
 #include <sys/stat.h>
 
@@ -32,6 +34,7 @@ static obs_hotkey_id load_first_backup_hotkey_id = OBS_INVALID_HOTKEY_ID;
 SceneCollectionManagerDialog *sceneCollectionManagerDialog = nullptr;
 
 static bool autoSaveBackup = false;
+static int autoSaveBackupMax = 30;
 static std::string customBackupDir;
 
 void ShowSceneCollectionManagerDialog()
@@ -115,7 +118,8 @@ static void BackupSceneCollection()
 
 	std::string backupName = os_generate_formatted_filename(
 		"", true, "%CCYY-%MM-%DD %hh:%mm:%ss");
-	backupName.resize(backupName.length() - 1);
+	if (backupName[backupName.size() - 1] == '.')
+		backupName.resize(backupName.length() - 1);
 
 	std::string safeName;
 	if (!GetFileSafeName(backupName.c_str(), safeName))
@@ -142,6 +146,54 @@ static void BackupSceneCollection()
 	const auto backupFile = backupDir + safeName + ".json";
 	obs_data_save_json(data, backupFile.c_str());
 	obs_data_release(data);
+
+	if (!autoSaveBackupMax)
+		return;
+	int file_count = 0;
+	time_t time = 0;
+	do {
+
+		const auto f = backupDir + "*.json";
+		os_glob_t *glob;
+		if (os_glob(f.c_str(), 0, &glob) != 0) {
+			return;
+		}
+		std::string backupFile;
+		time = 0;
+		file_count = 0;
+		for (size_t i = 0; i < glob->gl_pathc; i++) {
+			const char *filePath = glob->gl_pathv[i].path;
+
+			if (glob->gl_pathv[i].directory)
+				continue;
+
+			const char *fn = filePath;
+			const char *slash = strrchr(filePath, '/');
+			const char *backslash = strrchr(filePath, '\\');
+			if (slash && (!backslash || backslash < slash)) {
+				fn = slash + 1;
+			} else if (backslash && (!slash || slash < backslash)) {
+				fn = backslash + 1;
+			}
+			int d, t;
+			if (sscanf(fn, "%d_%d.json", &d, &t) != 2)
+				continue;
+
+			file_count++;
+			struct stat stats {};
+			if (os_stat(filePath, &stats) == 0 &&
+			    stats.st_size > 0 &&
+			    (time == 0 || stats.st_ctime <= time)) {
+				backupFile = filePath;
+				time = stats.st_ctime;
+			}
+		}
+		os_globfree(glob);
+		if (time && file_count > autoSaveBackupMax) {
+			if (os_unlink(backupFile.c_str()) != 0)
+				return;
+		}
+	} while (time && file_count > autoSaveBackupMax);
 }
 
 void BackupSceneCollectionHotkey(void *data, obs_hotkey_id id,
@@ -400,6 +452,8 @@ bool obs_module_load()
 	auto config = obs_frontend_get_global_config();
 	autoSaveBackup = config_get_bool(config, "SceneCollectionManager",
 					 "AutoSaveBackup");
+	autoSaveBackupMax = (int)config_get_int(
+		config, "SceneCollectionManager", "AutoSaveBackupMax");
 	auto *d = config_get_string(config, "SceneCollectionManager",
 				    "BackupDir");
 	if (d)
@@ -1228,6 +1282,7 @@ void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 	auto a = m.addAction(QString::fromUtf8(obs_module_text("Rename")));
 	connect(a, SIGNAL(triggered()), this,
 		SLOT(on_actionRenameBackup_triggered()));
+	m.addSeparator();
 
 	a = m.addAction(QString::fromUtf8(obs_module_text("AutoBackup")));
 	a->setCheckable(true);
@@ -1238,6 +1293,34 @@ void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 		config_set_bool(config, "SceneCollectionManager",
 				"AutoSaveBackup", autoSaveBackup);
 	});
+
+	QWidget *maxRow = new QWidget(&m);
+	auto hl = new QHBoxLayout;
+	maxRow->setLayout(hl);
+
+	QSpinBox *maxSpin = new QSpinBox(&m);
+	maxSpin->setMinimum(0);
+	maxSpin->setMaximum(1000);
+	maxSpin->setSingleStep(1);
+	maxSpin->setValue(autoSaveBackupMax);
+
+	hl->addWidget(maxSpin);
+
+	QWidgetAction *maxAction = new QWidgetAction(&m);
+	maxAction->setDefaultWidget(maxRow);
+
+	connect(maxSpin, (void(QSpinBox::*)(int)) & QSpinBox::valueChanged,
+		[](int val) {
+			autoSaveBackupMax = val;
+			const auto config = obs_frontend_get_global_config();
+			config_set_int(config, "SceneCollectionManager",
+				       "AutoSaveBackupMax", autoSaveBackupMax);
+		});
+
+	m.addMenu(QString::fromUtf8(obs_module_text("Max")))
+		->addAction(maxAction);
+
+	m.addSeparator();
 
 	auto dirMenu =
 		m.addMenu(QString::fromUtf8(obs_module_text("BackupDir")));
@@ -1461,7 +1544,8 @@ void SceneCollectionManagerDialog::ReadSceneCollections()
 }
 
 SceneCollectionManagerDialog::SceneCollectionManagerDialog(QMainWindow *parent)
-	: QDialog(parent), ui(new Ui::SceneCollectionManagerDialog)
+	: QDialog(parent),
+	  ui(new Ui::SceneCollectionManagerDialog)
 {
 	ui->setupUi(this);
 
