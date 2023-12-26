@@ -18,6 +18,14 @@ private:
 	void import_parts(obs_data_t *data, const char *dir);
 	void try_fix_paths(obs_data_t *data, const char *dir,
 			   char *path_buffer);
+	bool replace_source(obs_data_t *s, const char *id, const char *find,
+			    const char *replace, bool cs = true);
+	void replace_os_specific(obs_data_t *data);
+	void replace_gdi_sceneitem_transform(obs_data_t *item,
+					 std::map<std::string, obs_data_t *> gdi_sources);
+	void make_source_mac(obs_data_t *data);
+	void make_source_windows(obs_data_t *data);
+	void make_source_linux(obs_data_t *data);
 	void export_local_files(obs_data_t *data, std::string dir,
 				std::string subdir);
 private slots:

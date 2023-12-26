@@ -618,6 +618,7 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		}
 		import_parts(data, dir.c_str());
 		try_fix_paths(data, dir.c_str(), path_buffer);
+		replace_os_specific(data);
 
 		std::string path =
 			obs_module_config_path("../../basic/scenes/");
@@ -852,6 +853,252 @@ void SceneCollectionManagerDialog::try_fix_paths(obs_data_t *data,
 			}
 		}
 		obs_data_item_next(&item);
+	}
+}
+
+bool SceneCollectionManagerDialog::replace_source(obs_data_t *s, const char *id,
+						  const char *find,
+						  const char *replace, bool cs)
+{
+	if (strcmp(id, find) != 0)
+		return false;
+	obs_data_set_string(s, "id", replace);
+	const char *vid = obs_get_latest_input_type_id(replace);
+	obs_data_set_string(s, "versioned_id", vid ? vid : id);
+	if (cs) {
+		obs_data_t *c = obs_data_create();
+		obs_data_set_obj(s, "settings", c);
+		obs_data_release(c);
+	}
+
+	return true;
+}
+
+void SceneCollectionManagerDialog::make_source_mac(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "game_capture", "syphon-input");
+	replace_source(s, id, "wasapi_input_capture",
+		       "coreaudio_input_capture");
+	replace_source(s, id, "wasapi_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "pulse_input_capture", "coreaudio_input_capture");
+	replace_source(s, id, "pulse_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "jack_output_capture",
+		       "coreaudio_output_capture");
+	replace_source(s, id, "alsa_input_capture", "coreaudio_input_capture");
+	replace_source(s, id, "dshow_input", "av_capture_input");
+	replace_source(s, id, "v4l2_input", "av_capture_input");
+	replace_source(s, id, "xcomposite_input", "window_capture");
+	replace_source(s, id, "xshm_input", "monitor_capture", false);
+	bfree(id);
+}
+void SceneCollectionManagerDialog::make_source_windows(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "syphon-input", "game_capture");
+	replace_source(s, id, "coreaudio_input_capture",
+		       "wasapi_input_capture");
+	replace_source(s, id, "coreaudio_output_capture",
+		       "wasapi_output_capture");
+	replace_source(s, id, "pulse_input_capture", "wasapi_input_capture");
+	replace_source(s, id, "pulse_output_capture", "wasapi_output_capture");
+	replace_source(s, id, "jack_output_capture", "wasapi_output_capture");
+	replace_source(s, id, "alsa_input_capture", "wasapi_input_capture");
+	replace_source(s, id, "av_capture_input", "dshow_input");
+	replace_source(s, id, "v4l2_input", "dshow_input");
+	replace_source(s, id, "xcomposite_input", "window_capture");
+	bfree(id);
+}
+void SceneCollectionManagerDialog::make_source_linux(obs_data_t *s)
+{
+	char *id = bstrdup(obs_data_get_string(s, "id"));
+	replace_source(s, id, "coreaudio_input_capture", "pulse_input_capture");
+	replace_source(s, id, "coreaudio_output_capture",
+		       "pulse_output_capture");
+	replace_source(s, id, "wasapi_input_capture", "pulse_input_capture");
+	replace_source(s, id, "wasapi_output_capture", "pulse_output_capture");
+	replace_source(s, id, "av_capture_input", "v4l2_input");
+	replace_source(s, id, "dshow_input", "v4l2_input");
+	replace_source(s, id, "window_capture", "xcomposite_input");
+	bfree(id);
+}
+
+void SceneCollectionManagerDialog::replace_gdi_sceneitem_transform(
+	obs_data_t *item, std::map<std::string, obs_data_t *> gdi_sources)
+{
+	const char *name = obs_data_get_string(item, "name");
+	auto gdi = gdi_sources.find(name);
+	if (gdi == gdi_sources.end())
+		return;
+	struct vec2 scale;
+	obs_data_get_vec2(item, "scale", &scale);
+	scale.x *= 9.0f / 11.0f;
+	scale.y *= 9.0f / 11.0f;
+	if (obs_data_get_bool(gdi->second, "extents_wrap")) {
+		obs_data_set_int(item, "bounds_type", OBS_BOUNDS_MAX_ONLY);
+		struct vec2 bounds;
+		bounds.x = obs_data_get_double(gdi->second, "extents_cx");
+		bounds.y = obs_data_get_double(gdi->second, "extents_cy");
+		if (bounds.y < 2.0) {
+			auto font = obs_data_get_obj(gdi->second, "font");
+			auto font_size = obs_data_get_double(font, "size");
+			obs_data_release(font);
+			bounds.y = font_size;
+		}
+		obs_data_set_vec2(item, "bounds", &bounds);
+	} else {
+		obs_data_set_vec2(item, "scale", &scale);
+	}
+	const char *align_str = obs_data_get_string(gdi->second, "align");
+	const char *valign_str = obs_data_get_string(gdi->second, "valign");
+	int bounds_align = 0;
+	if (strcmp(align_str, "center") == 0) {
+		bounds_align += OBS_ALIGN_CENTER;
+		obs_data_set_int(gdi->second, "custom_width", 0);
+	} else if (strcmp(align_str, "right") == 0) {
+
+		bounds_align += OBS_ALIGN_RIGHT;
+	} else {
+
+		bounds_align += OBS_ALIGN_LEFT;
+	}
+
+	if (strcmp(valign_str, "center") == 0)
+		bounds_align += OBS_ALIGN_CENTER;
+	else if (strcmp(valign_str, "bottom") == 0)
+		bounds_align += OBS_ALIGN_BOTTOM;
+	else
+		bounds_align += OBS_ALIGN_TOP;
+	obs_data_set_int(item, "bounds_align", bounds_align);
+}
+
+void SceneCollectionManagerDialog::replace_os_specific(obs_data_t *data)
+{
+	obs_data_array_t *sources = obs_data_get_array(data, "sources");
+	if (!sources)
+		return;
+	std::map<std::string, obs_data_t *> gdi_sources;
+	auto count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+#ifdef WIN32
+		make_source_windows(s);
+#elif __APPLE__
+		make_source_mac(s);
+#else
+		make_source_linux(s);
+#endif
+#ifndef WIN32
+		if (strcmp(obs_data_get_string(s, "id"), "text_gdiplus") == 0) {
+			obs_data_set_string(s, "id", "text_ft2_source");
+			obs_data_set_string(s, "versioned_id",
+					    "text_ft2_source_v2");
+			obs_data_t *settings = obs_data_get_obj(s, "settings");
+			if (settings) {
+				obs_data_set_default_int(settings, "color",
+							 0xFFFFFF);
+				long long color =
+					obs_data_get_int(settings, "color");
+				color = color & 0xFFFFFF;
+				obs_data_set_default_int(settings, "opacity",
+							 100);
+				long long opacity =
+					obs_data_get_int(settings, "opacity");
+				color |= ((opacity * 255 / 100) & 0xFF) << 24;
+				obs_data_set_int(settings, "color1", color);
+				obs_data_set_int(settings, "color2", color);
+				obs_data_set_default_bool(settings,
+							  "extents_wrap", true);
+				if (obs_data_get_bool(settings,
+						      "extents_wrap")) {
+					obs_data_set_default_int(
+						settings, "extents_cx", 100);
+					obs_data_set_int(
+						settings, "custom_width",
+						obs_data_get_int(settings,
+								 "extents_cx"));
+					obs_data_set_bool(settings, "word_wrap",
+							  true);
+				}
+				gdi_sources.emplace(obs_data_get_string(s,
+									"name"),
+						    settings);
+			}
+		}
+#endif
+		obs_data_release(s);
+	}
+#ifndef WIN32
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+		if (strcmp(obs_data_get_string(s, "id"), "scene") != 0 &&
+		    strcmp(obs_data_get_string(s, "id"), "group") != 0) {
+			obs_data_release(s);
+			continue;
+		}
+
+		obs_data_t *settings = obs_data_get_obj(s, "settings");
+		obs_data_array_t *items = obs_data_get_array(settings, "items");
+		obs_data_release(settings);
+		auto item_count = obs_data_array_count(items);
+		for (size_t j = 0; j < item_count; j++) {
+			obs_data_t *item = obs_data_array_item(items, j);
+			if (!item)
+				continue;
+			replace_gdi_sceneitem_transform(item, gdi_sources);
+			obs_data_release(item);
+		}
+		obs_data_array_release(items);
+		obs_data_release(s);
+	}
+	obs_data_array_release(sources);
+
+	sources = obs_data_get_array(data, "groups");
+	count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *s = obs_data_array_item(sources, i);
+		if (!s)
+			continue;
+		obs_data_t *settings = obs_data_get_obj(s, "settings");
+		obs_data_array_t *items = obs_data_get_array(settings, "items");
+		obs_data_release(settings);
+		auto item_count = obs_data_array_count(items);
+		for (size_t j = 0; j < item_count; j++) {
+			obs_data_t *item = obs_data_array_item(items, j);
+			if (!item)
+				continue;
+			replace_gdi_sceneitem_transform(item, gdi_sources);
+			obs_data_release(item);
+		}
+		obs_data_array_release(items);
+		obs_data_release(s);
+	}
+	obs_data_array_release(sources);
+#endif
+	for (const auto &kv : gdi_sources) {
+		obs_data_release(kv.second);
+	}
+	auto globalAudio = {"DesktopAudioDevice1", "DesktopAudioDevice2",
+			    "AuxAudioDevice1",     "AuxAudioDevice2",
+			    "AuxAudioDevice3",     "AuxAudioDevice4"};
+	for (auto ga : globalAudio) {
+		obs_data_t *s = obs_data_get_obj(data, ga);
+		if (!s)
+			continue;
+#ifdef WIN32
+		make_source_windows(s);
+#elif __APPLE__
+		make_source_mac(s);
+#else
+		make_source_linux(s);
+#endif
+		obs_data_release(s);
 	}
 }
 
@@ -1511,14 +1758,21 @@ void SceneCollectionManagerDialog::on_backupList_itemDoubleClicked(
 
 void SceneCollectionManagerDialog::ReadSceneCollections()
 {
-	std::string path = obs_module_config_path("../../basic/scenes/*.json");
-	std::string path_abs = os_get_abs_path_ptr(path.c_str());
+	char *path = obs_module_config_path("../../basic/scenes/*.json");
+	if (!path) {
+		blog(LOG_WARNING, "Failed to get scene collections path");
+		return;
+	}
+	char *path_abs = os_get_abs_path_ptr(path);
 	os_glob_t *glob;
-	if (os_glob(path.c_str(), 0, &glob) != 0 &&
-	    os_glob(path_abs.c_str(), 0, &glob) != 0) {
+	if (os_glob(path, 0, &glob) != 0 && os_glob(path_abs, 0, &glob) != 0) {
+		bfree(path);
+		bfree(path_abs);
 		blog(LOG_WARNING, "Failed to glob scene collections");
 		return;
 	}
+	bfree(path);
+	bfree(path_abs);
 	scene_collections.clear();
 
 	for (size_t i = 0; i < glob->gl_pathc; i++) {
@@ -1529,14 +1783,23 @@ void SceneCollectionManagerDialog::ReadSceneCollections()
 
 		auto *data =
 			obs_data_create_from_json_file_safe(filePath, "bak");
+		if (!data)
+			continue;
 		std::string name = obs_data_get_string(data, "name");
 		obs_data_release(data);
 
 		/* if no name found, use the file name as the name
 		 * (this only happens when switching to the new version) */
 		if (name.empty()) {
-			name = strrchr(filePath, '/') + 1;
-			name.resize(name.size() - 5);
+			auto p = strrchr(filePath, '/');
+			if (!p)
+				p = strrchr(filePath, '\\');
+			if (p)
+				name = p + 1;
+			else
+				name = filePath;
+			if (name.size() > 5)
+				name.resize(name.size() - 5);
 		}
 		scene_collections[QString::fromUtf8(name.c_str())] = filePath;
 	}
