@@ -1765,10 +1765,12 @@ void SceneCollectionManagerDialog::ReadSceneCollections()
 	}
 	char *path_abs = os_get_abs_path_ptr(path);
 	os_glob_t *glob;
-	if (os_glob(path, 0, &glob) != 0 && os_glob(path_abs, 0, &glob) != 0) {
+	if ((!path_abs || os_glob(path_abs, 0, &glob) != 0) &&
+	    (!path || os_glob(path, 0, &glob) != 0)) {
+		blog(LOG_WARNING, "Failed to glob scene collections in:%s",
+		     path);
 		bfree(path);
 		bfree(path_abs);
-		blog(LOG_WARNING, "Failed to glob scene collections");
 		return;
 	}
 	bfree(path);
