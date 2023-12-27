@@ -97,18 +97,26 @@ bool GetFileSafeName(const char *name, std::string &file)
 	return true;
 }
 
+static std::string _scene_collections_path;
+
 static std::string SceneCollectionsPath()
 {
+	if (!_scene_collections_path.empty())
+		return _scene_collections_path;
 	char *path = obs_module_config_path("");
 	size_t l = strlen(path);
-	if (l == 0)
-		return "";
+	if (l == 0) {
+		bfree(path);
+		return _scene_collections_path;
+	}
+	//remove double slashes
 	char c = path[l - 1];
 	while (l > 0 && (c == '\\' || c == '/')) {
 		l--;
 		path[l] = '\0';
 		c = path[l - 1];
 	}
+	//remove module name from path
 	char *slash = strrchr(path, '/');
 	char *backslash = strrchr(path, '\\');
 	if (slash && (!backslash || slash > backslash)) {
@@ -116,6 +124,7 @@ static std::string SceneCollectionsPath()
 	} else if (backslash && (!slash || backslash > slash)) {
 		*backslash = '\0';
 	}
+	//remove double slashes
 	l = strlen(path);
 	if (l > 0) {
 		c = path[l - 1];
@@ -125,6 +134,7 @@ static std::string SceneCollectionsPath()
 			c = path[l - 1];
 		}
 	}
+	//remove plugin_config from path
 	slash = strrchr(path, '/');
 	backslash = strrchr(path, '\\');
 	if (slash && (!backslash || slash > backslash)) {
@@ -132,10 +142,21 @@ static std::string SceneCollectionsPath()
 	} else if (backslash && (!slash || backslash > slash)) {
 		*backslash = '\0';
 	}
-	std::string p = path;
+	//remove double slashes
+	l = strlen(path);
+	if (l > 0) {
+		c = path[l - 1];
+		while (l > 0 && (c == '\\' || c == '/')) {
+			l--;
+			path[l] = '\0';
+			c = path[l - 1];
+		}
+	}
+
+	_scene_collections_path = path;
+	_scene_collections_path += "/basic/scenes/";
 	bfree(path);
-	p += "/basic/scenes/";
-	return p;
+	return _scene_collections_path;
 }
 
 static void BackupSceneCollection()
@@ -1596,7 +1617,8 @@ void SceneCollectionManagerDialog::on_actionConfigBackup_triggered()
 		QUrl url;
 		if (customBackupDir.empty()) {
 			auto ptr = SceneCollectionsPath();
-			url = QUrl::fromLocalFile(QString::fromUtf8(ptr.c_str()));
+			url = QUrl::fromLocalFile(
+				QString::fromUtf8(ptr.c_str()));
 		} else {
 			url = QUrl::fromLocalFile(
 				QString::fromUtf8(customBackupDir.c_str()));
