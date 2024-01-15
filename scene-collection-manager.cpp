@@ -163,17 +163,24 @@ static void BackupSceneCollection()
 {
 	const auto currentSceneCollection =
 		obs_frontend_get_current_scene_collection();
-	if (!currentSceneCollection || strlen(currentSceneCollection) < 1)
+	if (!currentSceneCollection || strlen(currentSceneCollection) < 1) {
+		bfree(currentSceneCollection);
 		return;
+	}
 
 	obs_frontend_save();
 
 	std::string currentSafeName;
-	if (!GetFileSafeName(currentSceneCollection, currentSafeName))
+	if (!GetFileSafeName(currentSceneCollection, currentSafeName)) {
+		bfree(currentSceneCollection);
 		return;
+	}
+	bfree(currentSceneCollection);
+	char *fn = os_generate_formatted_filename("", true,
+						 "%CCYY-%MM-%DD %hh:%mm:%ss");
 
-	std::string backupName = os_generate_formatted_filename(
-		"", true, "%CCYY-%MM-%DD %hh:%mm:%ss");
+	std::string backupName = fn;
+	bfree(fn);
 	if (backupName[backupName.size() - 1] == '.')
 		backupName.resize(backupName.length() - 1);
 
