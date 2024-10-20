@@ -109,6 +109,9 @@
    <property name="themeID" stdset="0">
     <string notr="true">addIconSmall</string>
    </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-plus</string>
+   </property>
   </action>
   <action name="actionRemoveSceneCollection">
    <property name="icon">
@@ -120,6 +123,9 @@
    </property>
    <property name="themeID" stdset="0">
     <string notr="true">removeIconSmall</string>
+   </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-minus</string>
    </property>
   </action>
   <action name="actionAddBackup">
@@ -133,6 +139,9 @@
    <property name="themeID" stdset="0">
     <string notr="true">addIconSmall</string>
    </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-plus</string>
+   </property>
   </action>
   <action name="actionRemoveBackup">
    <property name="icon">
@@ -144,6 +153,9 @@
    </property>
    <property name="themeID" stdset="0">
     <string notr="true">removeIconSmall</string>
+   </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-minus</string>
    </property>
   </action>
   <action name="actionConfigSceneCollection">
@@ -157,6 +169,9 @@
    <property name="themeID" stdset="0">
     <string notr="true">propertiesIconSmall</string>
    </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-gear</string>
+   </property>
   </action>
   <action name="actionConfigBackup">
    <property name="icon">
@@ -168,6 +183,9 @@
    </property>
    <property name="themeID" stdset="0">
     <string notr="true">propertiesIconSmall</string>
+   </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-gear</string>
    </property>
   </action>
   <action name="actionSwitchBackup">
@@ -181,6 +199,9 @@
    <property name="themeID" stdset="0">
     <string notr="true">playIcon</string>
    </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-media-play</string>
+   </property>
   </action>
   <action name="actionSwitchSceneCollection">
    <property name="icon">
@@ -192,6 +213,9 @@
    </property>
    <property name="themeID" stdset="0">
     <string notr="true">playIcon</string>
+   </property>
+   <property name="class" stdset="0">
+    <string notr="true">icon-media-play</string>
    </property>
   </action>
  </widget>
