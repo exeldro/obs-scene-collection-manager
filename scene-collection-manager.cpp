@@ -20,6 +20,10 @@
 #include "util/config-file.h"
 #include "util/platform.h"
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+#include <obs-nix-platform.h>
+#endif
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Exeldro");
 OBS_MODULE_USE_DEFAULT_LOCALE("scene-collection-manager", "en-US")
@@ -835,15 +839,17 @@ void SceneCollectionManagerDialog::make_source_mac(obs_data_t *s)
 {
 	char *id = bstrdup(obs_data_get_string(s, "id"));
 	replace_source(s, id, "game_capture", "syphon-input");
+	replace_source(s, id, "window_capture", "screen_capture");
+	replace_source(s, id, "monitor_capture", "screen_capture");
 	replace_source(s, id, "wasapi_input_capture", "coreaudio_input_capture");
-	replace_source(s, id, "wasapi_output_capture", "coreaudio_output_capture");
+	replace_source(s, id, "wasapi_output_capture", "sck_audio_capture");
 	replace_source(s, id, "pulse_input_capture", "coreaudio_input_capture");
-	replace_source(s, id, "pulse_output_capture", "coreaudio_output_capture");
-	replace_source(s, id, "jack_output_capture", "coreaudio_output_capture");
+	replace_source(s, id, "pulse_output_capture", "sck_audio_capture");
+	replace_source(s, id, "jack_output_capture", "sck_audio_capture");
 	replace_source(s, id, "alsa_input_capture", "coreaudio_input_capture");
-	replace_source(s, id, "dshow_input", "av_capture_input");
-	replace_source(s, id, "v4l2_input", "av_capture_input");
-	replace_source(s, id, "xcomposite_input", "window_capture");
+	replace_source(s, id, "dshow_input", "macos-avcapture");
+	replace_source(s, id, "v4l2_input", "macos-avcapture");
+	replace_source(s, id, "xcomposite_input", "screen_capture");
 	replace_source(s, id, "xshm_input", "monitor_capture", false);
 	bfree(id);
 }
@@ -851,13 +857,16 @@ void SceneCollectionManagerDialog::make_source_windows(obs_data_t *s)
 {
 	char *id = bstrdup(obs_data_get_string(s, "id"));
 	replace_source(s, id, "syphon-input", "game_capture");
+	replace_source(s, id, "screen_capture", "monitor_capture");
 	replace_source(s, id, "coreaudio_input_capture", "wasapi_input_capture");
 	replace_source(s, id, "coreaudio_output_capture", "wasapi_output_capture");
+	replace_source(s, id, "sck_audio_capture", "wasapi_output_capture");
 	replace_source(s, id, "pulse_input_capture", "wasapi_input_capture");
 	replace_source(s, id, "pulse_output_capture", "wasapi_output_capture");
 	replace_source(s, id, "jack_output_capture", "wasapi_output_capture");
 	replace_source(s, id, "alsa_input_capture", "wasapi_input_capture");
 	replace_source(s, id, "av_capture_input", "dshow_input");
+	replace_source(s, id, "macos-avcapture", "dshow_input");
 	replace_source(s, id, "v4l2_input", "dshow_input");
 	replace_source(s, id, "xcomposite_input", "window_capture");
 	bfree(id);
@@ -867,11 +876,25 @@ void SceneCollectionManagerDialog::make_source_linux(obs_data_t *s)
 	char *id = bstrdup(obs_data_get_string(s, "id"));
 	replace_source(s, id, "coreaudio_input_capture", "pulse_input_capture");
 	replace_source(s, id, "coreaudio_output_capture", "pulse_output_capture");
+	replace_source(s, id, "sck_audio_capture", "pulse_output_capture");
 	replace_source(s, id, "wasapi_input_capture", "pulse_input_capture");
 	replace_source(s, id, "wasapi_output_capture", "pulse_output_capture");
 	replace_source(s, id, "av_capture_input", "v4l2_input");
+	replace_source(s, id, "macos-avcapture", "v4l2_input");
 	replace_source(s, id, "dshow_input", "v4l2_input");
-	replace_source(s, id, "window_capture", "xcomposite_input");
+#if !defined(_WIN32) && !defined(__APPLE__)
+	if (obs_get_nix_platform() == OBS_NIX_PLATFORM_X11_EGL) {
+		replace_source(s, id, "screen_capture", "xcomposite_input");
+		replace_source(s, id, "monitor_capture", "xcomposite_input");
+		replace_source(s, id, "window_capture", "xcomposite_input");
+		replace_source(s, id, "game_capture", "xcomposite_input");
+	} else {
+		replace_source(s, id, "screen_capture", "pipewire-screen-capture-source");
+		replace_source(s, id, "monitor_capture", "pipewire-screen-capture-source");
+		replace_source(s, id, "window_capture", "pipewire-screen-capture-source");
+		replace_source(s, id, "game_capture", "pipewire-screen-capture-source");
+	}
+#endif
 	bfree(id);
 }
 
