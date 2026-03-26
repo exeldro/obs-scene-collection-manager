@@ -621,8 +621,13 @@ void SceneCollectionManagerDialog::on_actionImportSceneCollection_triggered()
 		std::string path = SceneCollectionsPath();
 		path += safeName;
 		path += ".json";
-		std::string path_abs = os_get_abs_path_ptr(path.c_str());
-		obs_data_save_json_safe(data, path_abs.c_str(), "tmp", "bak");
+		auto path_abs = os_get_abs_path_ptr(path.c_str());
+		if (path_abs) {
+			obs_data_save_json_safe(data, path_abs, "tmp", "bak");
+			bfree(path_abs);
+		} else {
+			obs_data_save_json_safe(data, path.c_str(), "tmp", "bak");
+		}
 
 		if (replace_current) {
 			const auto config = obs_frontend_get_user_config();
@@ -1189,7 +1194,11 @@ void SceneCollectionManagerDialog::on_actionRemoveSceneCollection_triggered()
 		auto filePath = scene_collections.at(item->text());
 		if (filePath.length() == 0)
 			continue;
-		filePath = os_get_abs_path_ptr(filePath.c_str());
+		auto absolute = os_get_abs_path_ptr(filePath.c_str());
+		if (absolute) {
+			filePath = absolute;
+			bfree(absolute);
+		}
 		os_unlink(filePath.c_str());
 		auto backupDir = GetBackupDirectory(filePath);
 		const auto f = backupDir + "*.json";
