@@ -1689,6 +1689,47 @@ SceneCollectionManagerDialog::SceneCollectionManagerDialog(QMainWindow *parent)
 	title += " " PROJECT_VERSION;
 	setWindowTitle(title);
 
+	auto w = ui->sceneCollectionsToolbar->widgetForAction(ui->actionAddSceneCollection);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("addIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-plus")));
+	}
+	w = ui->sceneCollectionsToolbar->widgetForAction(ui->actionRemoveSceneCollection);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("removeIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-minus")));
+	}
+	w = ui->sceneCollectionsToolbar->widgetForAction(ui->actionConfigSceneCollection);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("propertiesIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-gear")));
+	}
+	w = ui->sceneCollectionsToolbar->widgetForAction(ui->actionSwitchSceneCollection);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("playIcon")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-media-play")));
+	}
+	w = ui->toolBar_2->widgetForAction(ui->actionAddBackup);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("addIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-plus")));
+	}
+	w = ui->toolBar_2->widgetForAction(ui->actionRemoveBackup);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("removeIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-minus")));
+	}
+	w = ui->toolBar_2->widgetForAction(ui->actionConfigBackup);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("propertiesIconSmall")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-gear")));
+	}
+	w = ui->toolBar_2->widgetForAction(ui->actionSwitchBackup);
+	if (w) {
+		w->setProperty("themeID", QVariant(QString::fromUtf8("playIcon")));
+		w->setProperty("class", QVariant(QString::fromUtf8("icon-media-play")));
+	}
+
 	ReadSceneCollections();
 	RefreshSceneCollections();
 }
