@@ -531,7 +531,9 @@ MODULE_EXPORT const char *obs_module_name(void)
 
 void SceneCollectionManagerDialog::RefreshSceneCollections()
 {
-	const auto current_scene_collection = QString::fromUtf8(obs_frontend_get_current_scene_collection());
+	auto csc = obs_frontend_get_current_scene_collection();
+	const auto current_scene_collection = csc ? QString::fromUtf8(csc) : QString();
+	bfree(csc);
 	const auto filter = ui->searchSceneCollectionEdit->text();
 	ui->sceneCollectionList->clear();
 	for (auto &scene_collection : scene_collections) {
@@ -1682,6 +1684,10 @@ SceneCollectionManagerDialog::SceneCollectionManagerDialog(QMainWindow *parent)
 	  ui(new Ui::SceneCollectionManagerDialog)
 {
 	ui->setupUi(this);
+
+	auto title = QString::fromUtf8(obs_module_text("SceneCollectionManager"));
+	title += " " PROJECT_VERSION;
+	setWindowTitle(title);
 
 	ReadSceneCollections();
 	RefreshSceneCollections();
